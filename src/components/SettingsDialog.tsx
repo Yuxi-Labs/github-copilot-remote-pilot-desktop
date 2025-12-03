@@ -78,6 +78,20 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
               />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-xs text-text-secondary">Preferred Model (optional)</label>
+              <input
+                type="text"
+                value={localSettings.model || ''}
+                onChange={(e) => setLocalSettings({ ...localSettings, model: e.target.value })}
+                placeholder="e.g., claude-opus-4.5-preview or leave blank to use controller default"
+                className="w-full px-3 py-2 bg-bg-primary border border-border rounded-md text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
+              />
+              <p className="text-[11px] text-text-secondary">
+                If set, this model id is sent with each message; the controller must honor it.
+              </p>
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"

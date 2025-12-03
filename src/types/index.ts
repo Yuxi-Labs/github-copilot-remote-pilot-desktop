@@ -26,6 +26,7 @@ export interface ClientMessage {
   payload: {
     message?: string;
     requestId?: string;
+    model?: string;
   };
 }
 
@@ -60,6 +61,7 @@ export interface Settings {
   fontSize: number;
   showToolbar: boolean;
   showStatusBar: boolean;
+  model?: string;
 }
 
 // Default settings
@@ -72,6 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 14,
   showToolbar: true,
   showStatusBar: true,
+  model: '',
 };
 
 // App state

@@ -121,12 +121,12 @@ export class WebSocketClient {
   /**
    * Send a chat message
    */
-  sendChat(content: string): string {
+  sendChat(content: string, model?: string): string {
     const id = generateUUID();
     const message: ClientMessage = {
       id,
       type: 'chat',
-      payload: { message: content },
+      payload: { message: content, ...(model ? { model } : {}) },
     };
     this.send(message);
     return id;

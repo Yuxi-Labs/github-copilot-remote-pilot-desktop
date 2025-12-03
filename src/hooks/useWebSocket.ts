@@ -17,7 +17,7 @@ interface UseWebSocketReturn {
   currentStreamingId: string | null;
   connect: () => void;
   disconnect: () => void;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, model?: string) => void;
   cancelMessage: (id: string) => void;
   clearMessages: () => void;
 }
@@ -72,7 +72,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setCurrentStreamingId(null);
   }, []);
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((content: string, model?: string) => {
     if (!wsClient.isConnected()) {
       onError?.('Not connected');
       return;
@@ -88,7 +88,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setMessages((prev) => [...prev, userMessage]);
 
     // Send to controller and get the message ID
-    const responseId = wsClient.sendChat(content);
+    const responseId = wsClient.sendChat(content, model);
 
     // Create placeholder for assistant response
     const assistantMessage: Message = {

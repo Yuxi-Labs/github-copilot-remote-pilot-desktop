@@ -130,7 +130,7 @@ function App() {
       {/* Chat View */}
       <ChatView
         messages={messages}
-        onSendMessage={sendMessage}
+        onSendMessage={(content) => sendMessage(content, settings.model && settings.model.trim() ? settings.model.trim() : undefined)}
         onCancelMessage={handleCancelMessage}
         isConnected={isConnected}
         isStreaming={isStreaming}
