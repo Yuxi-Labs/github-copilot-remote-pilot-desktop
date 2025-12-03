@@ -1,0 +1,84 @@
+// Connection status
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+// Message roles
+export type MessageRole = 'user' | 'assistant';
+
+// Chat message
+export interface Message {
+  id: string;
+  role: MessageRole;
+  content: string;
+  timestamp: number;
+  isStreaming?: boolean;
+}
+
+// Auth message (special format - token at root level)
+export interface AuthMessage {
+  type: 'auth';
+  token: string;
+}
+
+// Client → Controller messages
+export interface ClientMessage {
+  id: string;
+  type: 'chat' | 'cancel' | 'ping';
+  payload: {
+    message?: string;
+    requestId?: string;
+  };
+}
+
+// Auth response from controller
+export interface AuthResponse {
+  type: 'auth_result';
+  success: boolean;
+  error?: string;
+}
+
+// Controller → Client messages
+export interface ControllerMessage {
+  id: string;
+  type: 'chunk' | 'done' | 'error' | 'pong' | 'status';
+  payload: {
+    content?: string;
+    fullContent?: string;
+    error?: string;
+    message?: string;
+    code?: string;
+    timestamp?: number;
+  };
+}
+
+// App settings
+export interface Settings {
+  connectionUrl: string;
+  authToken: string;
+  autoReconnect: boolean;
+  reconnectInterval: number;
+  theme: 'light' | 'dark' | 'system';
+  fontSize: number;
+  showToolbar: boolean;
+  showStatusBar: boolean;
+}
+
+// Default settings
+export const DEFAULT_SETTINGS: Settings = {
+  connectionUrl: 'ws://localhost:3712/ws',
+  authToken: '',
+  autoReconnect: true,
+  reconnectInterval: 5000,
+  theme: 'system',
+  fontSize: 14,
+  showToolbar: true,
+  showStatusBar: true,
+};
+
+// App state
+export interface AppState {
+  connectionStatus: ConnectionStatus;
+  messages: Message[];
+  currentStreamingId: string | null;
+  settings: Settings;
+  error: string | null;
+}

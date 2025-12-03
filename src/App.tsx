@@ -1,50 +1,159 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useState, useCallback } from 'react';
+import { useWebSocket } from './hooks/useWebSocket';
+import { useSettings } from './hooks/useSettings';
+import { MenuBar } from './components/MenuBar';
+import { Toolbar } from './components/Toolbar';
+import { StatusBar } from './components/StatusBar';
+import { ChatView } from './components/ChatView';
+import { SettingsDialog } from './components/SettingsDialog';
+import './App.css';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const { settings, updateSettings, resetSettings } = useSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const {
+    connectionStatus,
+    messages,
+    currentStreamingId,
+    connect,
+    disconnect,
+    sendMessage,
+    cancelMessage,
+    clearMessages,
+  } = useWebSocket({
+    url: settings.connectionUrl,
+    token: settings.authToken,
+    autoReconnect: settings.autoReconnect,
+    onError: setError,
+  });
+
+  const isConnected = connectionStatus === 'connected';
+  const isStreaming = currentStreamingId !== null;
+
+  // Menu handlers
+  const handleNewChat = useCallback(() => {
+    clearMessages();
+  }, [clearMessages]);
+
+  const handleExportChat = useCallback(() => {
+    const text = messages
+      .map((m) => `[${m.role === 'user' ? 'You' : 'Copilot'}]: ${m.content}`)
+      .join('\n\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `copilot-chat-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [messages]);
+
+  const handleExit = useCallback(() => {
+    window.close();
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    const selection = window.getSelection()?.toString();
+    if (selection) {
+      navigator.clipboard.writeText(selection);
+    }
+  }, []);
+
+  const handlePaste = useCallback(async () => {
+    // Paste is handled natively by the textarea
+  }, []);
+
+  const handleShowAbout = useCallback(() => {
+    alert('Remote Pilot for GitHub Copilot\nVersion 0.0.1\n\n© 2025 William Sawyerr');
+  }, []);
+
+  const handleShowDocs = useCallback(() => {
+    window.open('https://github.com/Yuxi-Labs/github-copilot-remote-pilot-desktop', '_blank');
+  }, []);
+
+  const handleConnect = useCallback(() => {
+    if (!settings.connectionUrl || !settings.authToken) {
+      setSettingsOpen(true);
+      return;
+    }
+    connect();
+  }, [settings.connectionUrl, settings.authToken, connect]);
+
+  const handleCancelMessage = useCallback(() => {
+    if (currentStreamingId) {
+      cancelMessage(currentStreamingId);
+    }
+  }, [currentStreamingId, cancelMessage]);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex flex-col h-screen bg-bg-primary">
+      {/* Menu Bar */}
+      <MenuBar
+        onNewChat={handleNewChat}
+        onExportChat={handleExportChat}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onExit={handleExit}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
+        onClearChat={clearMessages}
+        showToolbar={settings.showToolbar}
+        showStatusBar={settings.showStatusBar}
+        onToggleToolbar={() => updateSettings({ showToolbar: !settings.showToolbar })}
+        onToggleStatusBar={() => updateSettings({ showStatusBar: !settings.showStatusBar })}
+        onShowAbout={handleShowAbout}
+        onShowDocs={handleShowDocs}
+      />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+      {/* Toolbar */}
+      {settings.showToolbar && (
+        <Toolbar
+          connectionStatus={connectionStatus}
+          onConnect={handleConnect}
+          onDisconnect={disconnect}
+          onNewChat={handleNewChat}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="px-4 py-2 bg-error/20 border-b border-error/30 text-error text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-error hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Chat View */}
+      <ChatView
+        messages={messages}
+        onSendMessage={sendMessage}
+        onCancelMessage={handleCancelMessage}
+        isConnected={isConnected}
+        isStreaming={isStreaming}
+      />
+
+      {/* Status Bar */}
+      {settings.showStatusBar && (
+        <StatusBar
+          connectionStatus={connectionStatus}
+          connectionUrl={settings.connectionUrl}
+          messageCount={messages.length}
+        />
+      )}
+
+      {/* Settings Dialog */}
+      <SettingsDialog
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onSave={updateSettings}
+        onReset={resetSettings}
+      />
+    </div>
   );
 }
 

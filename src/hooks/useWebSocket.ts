@@ -1,0 +1,196 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { wsClient } from '../services/websocket';
+import { ConnectionStatus, ControllerMessage, Message } from '../types';
+import { generateUUID } from '../utils/uuid';
+
+interface UseWebSocketOptions {
+  url: string;
+  token: string;
+  autoReconnect?: boolean;
+  reconnectInterval?: number;
+  onError?: (error: string) => void;
+}
+
+interface UseWebSocketReturn {
+  connectionStatus: ConnectionStatus;
+  messages: Message[];
+  currentStreamingId: string | null;
+  connect: () => void;
+  disconnect: () => void;
+  sendMessage: (content: string) => void;
+  cancelMessage: (id: string) => void;
+  clearMessages: () => void;
+}
+
+export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
+  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError } = options;
+
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentStreamingId, setCurrentStreamingId] = useState<string | null>(null);
+
+  // Use ref to track streaming content to avoid stale closure issues
+  const streamingContentRef = useRef<Map<string, string>>(new Map());
+
+  const connect = useCallback(() => {
+    if (!url || !token) {
+      onError?.('URL and token are required');
+      return;
+    }
+
+    setConnectionStatus('connecting');
+    wsClient.setAutoReconnect(autoReconnect, reconnectInterval);
+
+    wsClient.connect(url, token, {
+      onOpen: () => {
+        setConnectionStatus('connected');
+      },
+      onClose: () => {
+        setConnectionStatus('disconnected');
+        setCurrentStreamingId(null);
+      },
+      onError: () => {
+        setConnectionStatus('error');
+        onError?.('Connection failed');
+      },
+      onAuthSuccess: () => {
+        console.log('Authenticated successfully');
+      },
+      onAuthError: (error) => {
+        setConnectionStatus('error');
+        onError?.(error);
+      },
+      onMessage: (message: ControllerMessage) => {
+        handleControllerMessage(message);
+      },
+    });
+  }, [url, token, autoReconnect, reconnectInterval, onError]);
+
+  const disconnect = useCallback(() => {
+    wsClient.disconnect();
+    setConnectionStatus('disconnected');
+    setCurrentStreamingId(null);
+  }, []);
+
+  const sendMessage = useCallback((content: string) => {
+    if (!wsClient.isConnected()) {
+      onError?.('Not connected');
+      return;
+    }
+
+    // Add user message
+    const userMessage: Message = {
+      id: generateUUID(),
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Send to controller and get the message ID
+    const responseId = wsClient.sendChat(content);
+
+    // Create placeholder for assistant response
+    const assistantMessage: Message = {
+      id: responseId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isStreaming: true,
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+    setCurrentStreamingId(responseId);
+    streamingContentRef.current.set(responseId, '');
+  }, [onError]);
+
+  const cancelMessage = useCallback((id: string) => {
+    wsClient.sendCancel(id);
+    setCurrentStreamingId(null);
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === id ? { ...msg, isStreaming: false } : msg
+      )
+    );
+  }, []);
+
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    setCurrentStreamingId(null);
+    streamingContentRef.current.clear();
+  }, []);
+
+  const handleControllerMessage = useCallback((message: ControllerMessage) => {
+    switch (message.type) {
+      case 'chunk':
+        if (message.payload.content) {
+          const currentContent = streamingContentRef.current.get(message.id) || '';
+          const newContent = currentContent + message.payload.content;
+          streamingContentRef.current.set(message.id, newContent);
+
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === message.id
+                ? { ...msg, content: newContent }
+                : msg
+            )
+          );
+        }
+        break;
+
+      case 'done':
+        const finalContent = message.payload.fullContent ||
+          streamingContentRef.current.get(message.id) || '';
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === message.id
+              ? { ...msg, content: finalContent, isStreaming: false }
+              : msg
+          )
+        );
+        setCurrentStreamingId(null);
+        streamingContentRef.current.delete(message.id);
+        break;
+
+      case 'error':
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === message.id
+              ? {
+                  ...msg,
+                  content: `Error: ${message.payload.error || 'Unknown error'}`,
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+        setCurrentStreamingId(null);
+        streamingContentRef.current.delete(message.id);
+        onError?.(message.payload.error || 'Unknown error');
+        break;
+
+      case 'status':
+        console.log('Status:', message.payload.message);
+        break;
+    }
+  }, [onError]);
+
+  // Sync connection status with wsClient state on mount
+  // Don't disconnect on unmount - the singleton connection should persist
+  useEffect(() => {
+    if (wsClient.isConnected()) {
+      setConnectionStatus('connected');
+    }
+  }, []);
+
+  return {
+    connectionStatus,
+    messages,
+    currentStreamingId,
+    connect,
+    disconnect,
+    sendMessage,
+    cancelMessage,
+    clearMessages,
+  };
+}
