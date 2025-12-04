@@ -1,4 +1,4 @@
-import { X, Github } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface AboutDialogProps {
   isOpen: boolean;
@@ -14,80 +14,75 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-80 bg-bg-primary border border-border shadow-2xl overflow-hidden">
-        {/* Header accent bar */}
-        <div className="h-1 bg-accent" />
-        
+      <div className="relative w-[340px] bg-bg-secondary shadow-2xl">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1 text-text-secondary hover:text-text-primary transition-colors"
+          className="absolute top-4 right-4 text-text-secondary hover:text-text-primary transition-colors"
         >
-          <X size={16} />
+          <X size={18} />
         </button>
 
-        {/* Content */}
-        <div className="px-6 py-8">
-          {/* App Title with Icon */}
-          <div className="flex items-center gap-4 mb-6">
-            {/* App Icon */}
-            <div className="w-16 h-16 bg-accent flex items-center justify-center flex-shrink-0">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="w-9 h-9 text-white"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-                />
-              </svg>
-            </div>
-            {/* App Name */}
-            <div>
-              <h1 className="text-base font-medium text-text-primary">
-                Remote Pilot for GitHub Copilot
-              </h1>
-            </div>
-          </div>
-
-          {/* Info grid */}
-          <div className="space-y-3 text-xs">
-            <div className="flex justify-between">
-              <span className="text-text-secondary">Version</span>
-              <span className="text-text-primary font-mono">0.0.1</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-secondary">Build</span>
-              <span className="text-text-primary font-mono">Tauri + React</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-text-secondary">License</span>
-              <span className="text-text-primary">MIT</span>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-border my-6" />
-
-          {/* Footer */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-text-secondary">
-              © 2025 William Sawyerr. All rights reserved.
-            </p>
-            <a
-              href="https://github.com/Yuxi-Labs/github-copilot-remote-pilot-desktop"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-              title="View on GitHub"
+        {/* Header: Icon + Title + Description */}
+        <div className="flex items-start gap-4 px-6 pt-6 pb-5">
+          {/* App Icon - squared */}
+          <div className="w-[72px] h-[72px] bg-bg-tertiary border border-border flex items-center justify-center flex-shrink-0">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="w-10 h-10 text-text-primary"
             >
-              <Github size={16} />
-            </a>
+              <path
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+              />
+            </svg>
           </div>
+
+          {/* Title + Description */}
+          <div className="pt-1">
+            <h1 className="text-xl font-bold text-text-primary leading-tight">
+              Remote Pilot
+            </h1>
+            <p className="text-sm text-text-secondary mt-1 leading-snug">
+              Desktop client for GitHub<br />Copilot Controller
+            </p>
+          </div>
+        </div>
+
+        {/* Version Table */}
+        <div className="mx-6 mb-5 border border-border bg-bg-primary">
+          <div className="flex justify-between px-4 py-2.5 border-b border-border">
+            <span className="text-sm text-text-primary">Application</span>
+            <span className="text-sm text-text-secondary">0.0.1</span>
+          </div>
+          <div className="flex justify-between px-4 py-2.5 border-b border-border">
+            <span className="text-sm text-text-primary">Tauri</span>
+            <span className="text-sm text-text-secondary">2.x</span>
+          </div>
+          <div className="flex justify-between px-4 py-2.5">
+            <span className="text-sm text-text-primary">React</span>
+            <span className="text-sm text-text-secondary">19.x</span>
+          </div>
+        </div>
+
+        {/* Footer: Copyright + Close button */}
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+          <p className="text-xs text-text-secondary">
+            © 2025 William Sawyerr
+            <span className="mx-2">—</span>
+            <span className="text-accent">All rights reserved</span>
+          </p>
+
+          <button
+            onClick={onClose}
+            className="px-6 py-1.5 bg-bg-tertiary border border-border text-sm text-text-primary hover:bg-bg-hover transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
