@@ -145,6 +145,18 @@ export class WebSocketClient {
   }
 
   /**
+   * Request available models from the controller
+   */
+  requestModels(): void {
+    const message: ClientMessage = {
+      id: generateUUID(),
+      type: 'models',
+      payload: {},
+    };
+    this.send(message);
+  }
+
+  /**
    * Check if connected and authenticated
    */
   isConnected(): boolean {

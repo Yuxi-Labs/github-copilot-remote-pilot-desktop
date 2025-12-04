@@ -6,12 +6,31 @@ import { Toolbar } from './components/Toolbar';
 import { StatusBar } from './components/StatusBar';
 import { ChatView } from './components/ChatView';
 import { SettingsDialog } from './components/SettingsDialog';
+import { ModelInfo, ModeInfo, ChatMode } from './types';
 import './App.css';
+
+// Available modes
+const AVAILABLE_MODES: ModeInfo[] = [
+  { id: 'ask', name: 'Ask', description: 'Ask questions about code' },
+  { id: 'agent', name: 'Agent', description: 'Autonomous coding agent' },
+];
 
 function App() {
   const { settings, updateSettings, resetSettings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>(settings.model || '');
+  const [selectedMode, setSelectedMode] = useState<ChatMode>('ask');
+
+  const handleModelsReceived = useCallback((models: ModelInfo[]) => {
+    setAvailableModels(models);
+    // Select first model or default model if not already selected
+    if (!selectedModel && models.length > 0) {
+      const defaultModel = models.find(m => m.isDefault) || models[0];
+      setSelectedModel(defaultModel.id);
+    }
+  }, [selectedModel]);
 
   const {
     connectionStatus,
@@ -27,6 +46,7 @@ function App() {
     token: settings.authToken,
     autoReconnect: settings.autoReconnect,
     onError: setError,
+    onModelsReceived: handleModelsReceived,
   });
 
   const isConnected = connectionStatus === 'connected';
@@ -87,6 +107,15 @@ function App() {
     }
   }, [currentStreamingId, cancelMessage]);
 
+  const handleModelChange = useCallback((modelId: string) => {
+    setSelectedModel(modelId);
+    updateSettings({ model: modelId });
+  }, [updateSettings]);
+
+  const handleModeChange = useCallback((mode: ChatMode) => {
+    setSelectedMode(mode);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
       {/* Menu Bar */}
@@ -112,8 +141,6 @@ function App() {
           connectionStatus={connectionStatus}
           onConnect={handleConnect}
           onDisconnect={disconnect}
-          onNewChat={handleNewChat}
-          onOpenSettings={() => setSettingsOpen(true)}
         />
       )}
 
@@ -130,10 +157,17 @@ function App() {
       {/* Chat View */}
       <ChatView
         messages={messages}
-        onSendMessage={(content) => sendMessage(content, settings.model && settings.model.trim() ? settings.model.trim() : undefined)}
+        onSendMessage={(content) => sendMessage(content, selectedModel)}
         onCancelMessage={handleCancelMessage}
+        onNewChat={handleNewChat}
         isConnected={isConnected}
         isStreaming={isStreaming}
+        models={availableModels}
+        selectedModel={selectedModel}
+        onModelChange={handleModelChange}
+        modes={AVAILABLE_MODES}
+        selectedMode={selectedMode}
+        onModeChange={handleModeChange}
       />
 
       {/* Status Bar */}

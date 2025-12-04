@@ -405,11 +405,27 @@ interface AppState {
 | Settings Dialog | ✅ Complete | Basic settings UI |
 | Settings Persistence | ✅ Complete | Uses localStorage |
 | MenuBar | ✅ Complete | File, Edit, View, Help menus |
-| Toolbar | ✅ Complete | Connect, Settings, New Chat |
+| Toolbar | ✅ Complete | Connect, New Chat, connection status |
 | StatusBar | ✅ Complete | Shows connection status |
 | Message List | ✅ Complete | Displays conversation |
-| Message Input | ✅ Complete | Multi-line input |
-| Tailwind CSS 4 | ✅ Complete | Modern styling |
+| Message Input | ✅ Complete | Multi-line input with mode/model selectors |
+| Mode Selector | ✅ Complete | Ask/Agent modes (VS Code style) |
+| Model Selector | ✅ Complete | Model dropdown in input area |
+| Tailwind CSS 4 | ✅ Complete | Modern styling, square UI |
+
+---
+
+## Backlog (Future Features)
+
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Tools Button | Medium | Enable/disable tools for agent mode |
+| File Attachments | Medium | Attach files to chat context |
+| Cloud Agent | Low | Delegate to cloud agent via GitHub Copilot |
+| Markdown Rendering | High | Render markdown in responses |
+| Code Highlighting | High | Syntax highlighting in code blocks |
+| Chat History | Medium | Persist chat across sessions |
+| Secure Token Storage | High | Use OS keychain instead of localStorage |
 
 ---
 

@@ -4,6 +4,25 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 // Message roles
 export type MessageRole = 'user' | 'assistant';
 
+// Chat mode (similar to VS Code Copilot)
+export type ChatMode = 'ask' | 'agent';
+
+// Mode information
+export interface ModeInfo {
+  id: ChatMode;
+  name: string;
+  description: string;
+}
+
+// Model information
+export interface ModelInfo {
+  id: string;
+  name: string;
+  vendor?: string;
+  version?: string;
+  isDefault?: boolean;
+}
+
 // Chat message
 export interface Message {
   id: string;
@@ -22,7 +41,7 @@ export interface AuthMessage {
 // Client → Controller messages
 export interface ClientMessage {
   id: string;
-  type: 'chat' | 'cancel' | 'ping';
+  type: 'chat' | 'cancel' | 'ping' | 'models';
   payload: {
     message?: string;
     requestId?: string;
@@ -40,7 +59,7 @@ export interface AuthResponse {
 // Controller → Client messages
 export interface ControllerMessage {
   id: string;
-  type: 'chunk' | 'done' | 'error' | 'pong' | 'status';
+  type: 'chunk' | 'done' | 'error' | 'pong' | 'status' | 'models';
   payload: {
     content?: string;
     fullContent?: string;
@@ -48,6 +67,7 @@ export interface ControllerMessage {
     message?: string;
     code?: string;
     timestamp?: number;
+    models?: ModelInfo[];
   };
 }
 

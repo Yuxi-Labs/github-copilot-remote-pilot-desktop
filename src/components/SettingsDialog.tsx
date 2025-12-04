@@ -38,13 +38,13 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-md bg-bg-secondary border border-border rounded-lg shadow-xl">
+      <div className="relative w-full max-w-md bg-bg-secondary border border-border shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="text-lg font-semibold text-text-primary">Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded"
+            className="p-1 text-text-secondary hover:text-text-primary hover:bg-bg-hover"
           >
             <X size={20} />
           </button>
@@ -63,7 +63,7 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
                 value={localSettings.connectionUrl}
                 onChange={(e) => setLocalSettings({ ...localSettings, connectionUrl: e.target.value })}
                 placeholder="ws://localhost:3712/ws"
-                className="w-full px-3 py-2 bg-bg-primary border border-border rounded-md text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-primary border border-border text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
               />
             </div>
 
@@ -74,7 +74,7 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
                 value={localSettings.authToken}
                 onChange={(e) => setLocalSettings({ ...localSettings, authToken: e.target.value })}
                 placeholder="Enter your auth token"
-                className="w-full px-3 py-2 bg-bg-primary border border-border rounded-md text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-primary border border-border text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
               />
             </div>
 
@@ -85,7 +85,7 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
                 value={localSettings.model || ''}
                 onChange={(e) => setLocalSettings({ ...localSettings, model: e.target.value })}
                 placeholder="e.g., claude-opus-4.5-preview or leave blank to use controller default"
-                className="w-full px-3 py-2 bg-bg-primary border border-border rounded-md text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-primary border border-border text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
               />
               <p className="text-[11px] text-text-secondary">
                 If set, this model id is sent with each message; the controller must honor it.
@@ -142,7 +142,7 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
           >
             <RotateCcw size={14} />
             <span>Reset</span>
@@ -151,13 +151,13 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-1.5 text-sm text-text-primary bg-bg-tertiary border border-border rounded-md hover:bg-bg-hover transition-colors"
+              className="px-4 py-1.5 text-sm text-text-primary bg-bg-tertiary border border-border hover:bg-bg-hover transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm text-white bg-accent rounded-md hover:bg-accent-hover transition-colors"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm text-white bg-accent hover:bg-accent-hover transition-colors"
             >
               <Save size={14} />
               <span>Save</span>

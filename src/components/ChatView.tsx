@@ -1,4 +1,4 @@
-import { Message } from '../types';
+import { Message, ModelInfo, ModeInfo, ChatMode } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
@@ -8,6 +8,12 @@ interface ChatViewProps {
   onCancelMessage?: () => void;
   isConnected: boolean;
   isStreaming: boolean;
+  models: ModelInfo[];
+  selectedModel: string;
+  onModelChange: (modelId: string) => void;
+  modes: ModeInfo[];
+  selectedMode: ChatMode;
+  onModeChange: (mode: ChatMode) => void;
 }
 
 export function ChatView({
@@ -16,6 +22,12 @@ export function ChatView({
   onCancelMessage,
   isConnected,
   isStreaming,
+  models,
+  selectedModel,
+  onModelChange,
+  modes,
+  selectedMode,
+  onModeChange,
 }: ChatViewProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
@@ -25,6 +37,12 @@ export function ChatView({
         onCancel={onCancelMessage}
         disabled={!isConnected}
         isStreaming={isStreaming}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={onModelChange}
+        modes={modes}
+        selectedMode={selectedMode}
+        onModeChange={onModeChange}
       />
     </div>
   );

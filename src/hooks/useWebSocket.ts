@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { wsClient } from '../services/websocket';
-import { ConnectionStatus, ControllerMessage, Message } from '../types';
+import { ConnectionStatus, ControllerMessage, Message, ModelInfo } from '../types';
 import { generateUUID } from '../utils/uuid';
 
 interface UseWebSocketOptions {
@@ -9,6 +9,7 @@ interface UseWebSocketOptions {
   autoReconnect?: boolean;
   reconnectInterval?: number;
   onError?: (error: string) => void;
+  onModelsReceived?: (models: ModelInfo[]) => void;
 }
 
 interface UseWebSocketReturn {
@@ -20,10 +21,11 @@ interface UseWebSocketReturn {
   sendMessage: (content: string, model?: string) => void;
   cancelMessage: (id: string) => void;
   clearMessages: () => void;
+  requestModels: () => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError } = options;
+  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived } = options;
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -55,6 +57,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       },
       onAuthSuccess: () => {
         console.log('Authenticated successfully');
+        // Request available models after authentication
+        wsClient.requestModels();
       },
       onAuthError: (error) => {
         setConnectionStatus('error');
@@ -119,6 +123,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     streamingContentRef.current.clear();
   }, []);
 
+  const requestModels = useCallback(() => {
+    wsClient.requestModels();
+  }, []);
+
   const handleControllerMessage = useCallback((message: ControllerMessage) => {
     switch (message.type) {
       case 'chunk':
@@ -172,8 +180,15 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       case 'status':
         console.log('Status:', message.payload.message);
         break;
+
+      case 'models':
+        if (message.payload.models) {
+          console.log('Models received:', message.payload.models);
+          onModelsReceived?.(message.payload.models);
+        }
+        break;
     }
-  }, [onError]);
+  }, [onError, onModelsReceived]);
 
   // Sync connection status with wsClient state on mount
   // Don't disconnect on unmount - the singleton connection should persist
@@ -192,5 +207,6 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     sendMessage,
     cancelMessage,
     clearMessages,
+    requestModels,
   };
 }

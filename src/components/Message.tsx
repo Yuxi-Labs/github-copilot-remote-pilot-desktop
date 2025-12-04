@@ -16,7 +16,7 @@ export function Message({ message }: MessageProps) {
     <div className={`flex gap-3 p-4 ${isUser ? 'bg-bg-secondary' : 'bg-bg-primary'}`}>
       {/* Avatar */}
       <div
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+        className={`flex-shrink-0 w-8 h-8 flex items-center justify-center ${
           isUser ? 'bg-accent' : 'bg-purple-600'
         }`}
       >

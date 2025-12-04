@@ -51,13 +51,13 @@ function Menu({ label, children }: MenuProps) {
   return (
     <div ref={menuRef} className="relative">
       <button
-        className="px-2.5 py-1 text-sm text-text-primary hover:bg-bg-hover rounded"
+        className="px-2.5 py-1 text-sm text-text-primary hover:bg-bg-hover"
         onClick={() => setIsOpen(!isOpen)}
       >
         {label}
       </button>
       {isOpen && (
-        <div className="absolute top-full left-0 mt-0.5 min-w-[200px] bg-bg-primary border border-border rounded-md shadow-lg z-50 py-1">
+        <div className="absolute top-full left-0 mt-0.5 min-w-[200px] bg-bg-primary border border-border shadow-lg z-50 py-1">
           {children}
         </div>
       )}
