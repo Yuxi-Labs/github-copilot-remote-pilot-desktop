@@ -1,4 +1,4 @@
-# Remote Pilot for GitHub Copilot - Desktop Client
+# Remote Pilot for GitHub Copilot
 
 A native desktop application that connects to the **Controller for GitHub Copilot** VS Code extension, enabling real-time chat with GitHub Copilot from outside VS Code.
 
@@ -10,12 +10,12 @@ When you're away from your desktop but want to continue chatting with the same C
 
 ## Features
 
-- 🔌 **WebSocket Connection** — Real-time bidirectional communication
-- 💬 **Streaming Responses** — See Copilot's responses as they're generated
-- 🔐 **Token Authentication** — Secure connection to your VS Code instance
-- 🔄 **Auto-Reconnect** — Automatically reconnects on network drops
-- 🎨 **Dark Theme** — Easy on the eyes
-- 📋 **Export Chat** — Save conversations to file
+- **WebSocket Connection** — Real-time bidirectional communication
+- **Streaming Responses** — See Copilot's responses as they're generated
+- **Token Authentication** — Secure connection to your VS Code instance
+- **Auto-Reconnect** — Automatically reconnects on network drops
+- **Dark Theme** — Easy on the eyes
+- **Export Chat** — Save conversations to file
 
 ## Prerequisites
 
