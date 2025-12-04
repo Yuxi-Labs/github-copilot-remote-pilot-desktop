@@ -50,6 +50,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       onClose: () => {
         setConnectionStatus('disconnected');
         setCurrentStreamingId(null);
+        // Clear models on disconnect
+        onModelsReceived?.([]);
       },
       onError: () => {
         setConnectionStatus('error');
@@ -74,7 +76,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     wsClient.disconnect();
     setConnectionStatus('disconnected');
     setCurrentStreamingId(null);
-  }, []);
+    // Clear models on disconnect
+    onModelsReceived?.([]);
+  }, [onModelsReceived]);
 
   const sendMessage = useCallback((content: string, model?: string) => {
     if (!wsClient.isConnected()) {

@@ -1,4 +1,4 @@
-import { Plug, Unplug, Loader2 } from 'lucide-react';
+import { Plug, Unplug, PlugZap } from 'lucide-react';
 import { ConnectionStatus } from '../types';
 
 interface ToolbarProps {
@@ -15,35 +15,34 @@ export function Toolbar({
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting';
 
-  const handleToggle = () => {
-    if (isConnected) {
-      onDisconnect();
-    } else {
-      onConnect();
-    }
-  };
-
-  // Icon button styles based on connection state
-  const iconButtonStyle = isConnected
-    ? 'text-success hover:bg-success/10'
-    : 'text-text-secondary hover:bg-bg-hover';
-
   return (
     <div className="flex items-center h-10 bg-bg-secondary border-b border-border px-3 gap-1">
-      {/* Connection Toggle Icon */}
+      {/* Connect Button - shows Plug when disconnected, PlugZap when connected */}
       <button
-        className={`flex items-center justify-center w-8 h-8 transition-colors ${iconButtonStyle} disabled:opacity-50 disabled:cursor-not-allowed`}
-        onClick={handleToggle}
-        disabled={isConnecting}
-        title={isConnected ? 'Disconnect from controller' : 'Connect to controller'}
+        className={`flex items-center justify-center w-8 h-8 transition-colors ${
+          isConnected
+            ? 'text-success cursor-default'
+            : 'text-text-secondary hover:bg-bg-hover disabled:opacity-50 disabled:cursor-not-allowed'
+        }`}
+        onClick={onConnect}
+        disabled={isConnected || isConnecting}
+        title={isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Connect to controller'}
       >
-        {isConnecting ? (
-          <Loader2 size={18} className="animate-spin text-warning" />
-        ) : isConnected ? (
-          <Unplug size={18} className="text-success" />
-        ) : (
-          <Plug size={18} />
-        )}
+        {isConnected ? <PlugZap size={18} /> : <Plug size={18} />}
+      </button>
+
+      {/* Disconnect Button */}
+      <button
+        className={`flex items-center justify-center w-8 h-8 transition-colors ${
+          isConnected
+            ? 'text-text-secondary hover:bg-bg-hover'
+            : 'text-text-secondary opacity-40 cursor-default'
+        }`}
+        onClick={onDisconnect}
+        disabled={!isConnected}
+        title={isConnected ? 'Disconnect from controller' : 'Not connected'}
+      >
+        <Unplug size={18} />
       </button>
 
       <div className="flex-1" />

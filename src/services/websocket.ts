@@ -123,11 +123,13 @@ export class WebSocketClient {
    */
   sendChat(content: string, model?: string): string {
     const id = generateUUID();
+    console.log(`[WebSocket] Sending chat with model: "${model}"`);
     const message: ClientMessage = {
       id,
       type: 'chat',
       payload: { message: content, ...(model ? { model } : {}) },
     };
+    console.log('[WebSocket] Message payload:', JSON.stringify(message));
     this.send(message);
     return id;
   }

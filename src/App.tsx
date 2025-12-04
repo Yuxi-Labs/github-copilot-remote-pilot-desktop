@@ -25,17 +25,30 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || '');
-  const [selectedMode, setSelectedMode] = useState<ChatMode>('ask');
+  const [selectedMode, setSelectedMode] = useState<ChatMode>('agent');
 
   const handleModelsReceived = useCallback((models: ModelInfo[]) => {
     console.log('Models received in App:', models);
+    console.log('Model IDs:', models.map(m => m.id));
     setAvailableModels(models);
-    // Select first model or default model if not already selected
-    if (!selectedModel && models.length > 0) {
-      const defaultModel = models.find(m => m.isDefault) || models[0];
-      setSelectedModel(defaultModel.id);
+    if (models.length === 0) {
+      // Clear selected model on disconnect
+      setSelectedModel('');
+    } else {
+      // Always update to ensure we have a valid model selected
+      setSelectedModel(current => {
+        // If current selection exists in new models, keep it
+        if (current && models.some(m => m.id === current)) {
+          console.log('Keeping current model:', current);
+          return current;
+        }
+        // Otherwise select default or first model
+        const defaultModel = models.find(m => m.isDefault) || models[0];
+        console.log('Auto-selecting model:', defaultModel.id);
+        return defaultModel.id;
+      });
     }
-  }, [selectedModel]);
+  }, []);
 
   const {
     connectionStatus,
@@ -113,6 +126,7 @@ function App() {
   }, [currentStreamingId, cancelMessage]);
 
   const handleModelChange = useCallback((modelId: string) => {
+    console.log('Model changed to:', modelId);
     setSelectedModel(modelId);
     updateSettings({ model: modelId });
   }, [updateSettings]);

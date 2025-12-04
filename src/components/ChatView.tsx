@@ -39,6 +39,7 @@ export function ChatView({
         onCancel={onCancelMessage}
         disabled={!isConnected}
         isStreaming={isStreaming}
+        isConnected={isConnected}
         models={models}
         selectedModel={selectedModel}
         onModelChange={onModelChange}

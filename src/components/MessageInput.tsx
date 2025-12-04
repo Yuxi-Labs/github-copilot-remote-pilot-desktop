@@ -7,6 +7,7 @@ interface MessageInputProps {
   onCancel?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  isConnected?: boolean;
   models: ModelInfo[];
   selectedModel: string;
   onModelChange: (modelId: string) => void;
@@ -20,6 +21,7 @@ export function MessageInput({
   onCancel,
   disabled,
   isStreaming,
+  isConnected,
   models,
   selectedModel,
   onModelChange,
@@ -84,7 +86,7 @@ export function MessageInput({
           <button
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-primary bg-bg-tertiary border border-border hover:bg-bg-hover hover:border-border-hover transition-colors"
             onClick={() => setModeDropdownOpen(!modeDropdownOpen)}
-            title={currentMode?.description}
+            title="Select chat mode (Agent, Ask, Edit, or Plan)"
           >
             <span>{currentMode?.name || 'Ask'}</span>
             <ChevronDown size={12} className={`transition-transform ${modeDropdownOpen ? 'rotate-180' : ''}`} />
@@ -116,9 +118,19 @@ export function MessageInput({
           <button
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-primary bg-bg-tertiary border border-border hover:bg-bg-hover hover:border-border-hover transition-colors"
             onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-            title={models.length === 0 ? 'Connect to load available models' : 'Select AI model'}
+            title={
+              !isConnected
+                ? 'Connect to load and select from available models'
+                : models.length > 0
+                  ? 'Select from available AI models'
+                  : 'Loading available models...'
+            }
           >
-            <span>{currentModel?.name || selectedModel || 'Select Model'}</span>
+            <span>
+              {!isConnected
+                ? 'Select Model'
+                : currentModel?.name || selectedModel || 'Select Model'}
+            </span>
             <ChevronDown size={12} className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -126,7 +138,7 @@ export function MessageInput({
             <div className="absolute bottom-full left-0 mb-1 min-w-[180px] max-h-[250px] overflow-y-auto bg-bg-primary border border-border shadow-lg z-50">
               {models.map((model) => (
                 <button
-                  key={model.id}
+                  key={`${model.vendor || 'default'}-${model.id}`}
                   className={`flex flex-col w-full px-3 py-2 text-left hover:bg-bg-hover transition-colors ${
                     model.id === selectedModel ? 'bg-bg-tertiary' : ''
                   }`}
@@ -157,7 +169,7 @@ export function MessageInput({
             placeholder={disabled ? 'Connect to start chatting...' : 'Ask Copilot or type / for commands'}
             disabled={disabled || isStreaming}
             rows={1}
-            className="w-full px-3 py-2 bg-bg-primary border border-border text-sm text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 bg-bg-primary border border-border text-sm text-text-primary placeholder:text-text-secondary resize-none focus:outline-none focus:border-accent disabled:opacity-50"
           />
         </div>
 
@@ -173,7 +185,7 @@ export function MessageInput({
           <button
             onClick={handleSend}
             disabled={!message.trim() || disabled}
-            className="flex items-center justify-center w-8 h-8 bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center w-8 h-8 bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors"
             title="Send message"
           >
             <Send size={18} />
