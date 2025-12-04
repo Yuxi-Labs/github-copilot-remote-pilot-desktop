@@ -142,11 +142,8 @@ export function MenuBar({
         </Menu>
       </div>
 
-      <div className="flex-1 text-center text-sm font-medium text-text-secondary" data-tauri-drag-region>
-        Remote Pilot for GitHub Copilot
-      </div>
-
-      <div className="w-24" data-tauri-drag-region />
+      {/* Drag region for window movement */}
+      <div className="flex-1" data-tauri-drag-region />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "remote-pilot-for-github-copilot-desktop",
+  "productName": "Remote Pilot for GitHub Copilot",
   "version": "0.1.0",
   "identifier": "com.wsawyerr.remote-pilot-for-github-copilot-desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "remote-pilot-for-github-copilot-desktop",
+        "title": "Remote Pilot for GitHub Copilot",
         "width": 800,
         "height": 600
       }

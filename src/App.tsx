@@ -6,6 +6,7 @@ import { Toolbar } from './components/Toolbar';
 import { StatusBar } from './components/StatusBar';
 import { ChatView } from './components/ChatView';
 import { SettingsDialog } from './components/SettingsDialog';
+import { AboutDialog } from './components/AboutDialog';
 import { ModelInfo, ModeInfo, ChatMode } from './types';
 import './App.css';
 
@@ -18,6 +19,7 @@ const AVAILABLE_MODES: ModeInfo[] = [
 function App() {
   const { settings, updateSettings, resetSettings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(settings.model || '');
@@ -86,7 +88,7 @@ function App() {
   }, []);
 
   const handleShowAbout = useCallback(() => {
-    alert('Remote Pilot for GitHub Copilot\nVersion 0.0.1\n\n© 2025 William Sawyerr');
+    setAboutOpen(true);
   }, []);
 
   const handleShowDocs = useCallback(() => {
@@ -186,6 +188,12 @@ function App() {
         settings={settings}
         onSave={updateSettings}
         onReset={resetSettings}
+      />
+
+      {/* About Dialog */}
+      <AboutDialog
+        isOpen={aboutOpen}
+        onClose={() => setAboutOpen(false)}
       />
     </div>
   );

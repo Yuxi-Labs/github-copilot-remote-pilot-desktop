@@ -6,6 +6,7 @@ interface ChatViewProps {
   messages: Message[];
   onSendMessage: (content: string) => void;
   onCancelMessage?: () => void;
+  onNewChat: () => void;
   isConnected: boolean;
   isStreaming: boolean;
   models: ModelInfo[];
@@ -20,6 +21,7 @@ export function ChatView({
   messages,
   onSendMessage,
   onCancelMessage,
+  onNewChat,
   isConnected,
   isStreaming,
   models,
@@ -31,7 +33,7 @@ export function ChatView({
 }: ChatViewProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
-      <MessageList messages={messages} />
+      <MessageList messages={messages} onNewChat={onNewChat} />
       <MessageInput
         onSend={onSendMessage}
         onCancel={onCancelMessage}
