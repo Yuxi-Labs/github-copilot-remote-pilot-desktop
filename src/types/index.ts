@@ -5,7 +5,7 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 export type MessageRole = 'user' | 'assistant';
 
 // Chat mode (similar to VS Code Copilot)
-export type ChatMode = 'ask' | 'agent';
+export type ChatMode = 'agent' | 'ask' | 'edit' | 'plan';
 
 // Mode information
 export interface ModeInfo {

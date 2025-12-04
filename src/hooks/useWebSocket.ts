@@ -56,7 +56,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         onError?.('Connection failed');
       },
       onAuthSuccess: () => {
-        console.log('Authenticated successfully');
+        console.log('Authenticated successfully, requesting models...');
         // Request available models after authentication
         wsClient.requestModels();
       },

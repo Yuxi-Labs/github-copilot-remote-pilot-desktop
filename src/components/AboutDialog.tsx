@@ -1,4 +1,7 @@
 import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { version as reactVersion } from 'react';
+import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
 
 interface AboutDialogProps {
   isOpen: boolean;
@@ -6,6 +9,15 @@ interface AboutDialogProps {
 }
 
 export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
+  const [appVersion, setAppVersion] = useState<string>('...');
+  const [tauriVersion, setTauriVersion] = useState<string>('...');
+
+  useEffect(() => {
+    if (isOpen) {
+      getVersion().then(setAppVersion);
+      getTauriVersion().then(setTauriVersion);
+    }
+  }, [isOpen]);
   if (!isOpen) return null;
 
   return (
@@ -14,7 +26,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-[340px] bg-bg-secondary shadow-2xl">
+      <div className="relative w-[420px] bg-bg-secondary shadow-2xl">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -43,29 +55,30 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
           </div>
 
           {/* Title + Description */}
-          <div className="pt-1">
+          <div className="pt-1 flex-1">
             <h1 className="text-xl font-bold text-text-primary leading-tight">
-              Remote Pilot
+              Remote Pilot<br />
+              for GitHub Copilot
             </h1>
             <p className="text-sm text-text-secondary mt-1 leading-snug">
-              Desktop client for GitHub<br />Copilot Controller
+              Desktop client for GitHub Copilot Controller
             </p>
           </div>
         </div>
 
         {/* Version Table */}
         <div className="mx-6 mb-5 border border-border bg-bg-primary">
-          <div className="flex justify-between px-4 py-2.5 border-b border-border">
+          <div className="flex justify-between px-4 py-2.5">
             <span className="text-sm text-text-primary">Application</span>
-            <span className="text-sm text-text-secondary">0.0.1</span>
-          </div>
-          <div className="flex justify-between px-4 py-2.5 border-b border-border">
-            <span className="text-sm text-text-primary">Tauri</span>
-            <span className="text-sm text-text-secondary">2.x</span>
+            <span className="text-sm text-text-secondary">{appVersion}</span>
           </div>
           <div className="flex justify-between px-4 py-2.5">
             <span className="text-sm text-text-primary">React</span>
-            <span className="text-sm text-text-secondary">19.x</span>
+            <span className="text-sm text-text-secondary">{reactVersion}</span>
+          </div>
+          <div className="flex justify-between px-4 py-2.5">
+            <span className="text-sm text-text-primary">Tauri</span>
+            <span className="text-sm text-text-secondary">{tauriVersion}</span>
           </div>
         </div>
 
@@ -74,7 +87,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
           <p className="text-xs text-text-secondary">
             © 2025 William Sawyerr
             <span className="mx-2">—</span>
-            <span className="text-accent">All rights reserved</span>
+            <span>All rights reserved</span>
           </p>
 
           <button

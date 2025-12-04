@@ -148,6 +148,7 @@ export class WebSocketClient {
    * Request available models from the controller
    */
   requestModels(): void {
+    console.log('Sending models request to controller...');
     const message: ClientMessage = {
       id: generateUUID(),
       type: 'models',

@@ -84,7 +84,7 @@ export function MessageInput({
           <button
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-primary bg-bg-tertiary border border-border hover:bg-bg-hover hover:border-border-hover transition-colors"
             onClick={() => setModeDropdownOpen(!modeDropdownOpen)}
-            disabled={disabled}
+            title={currentMode?.description}
           >
             <span>{currentMode?.name || 'Ask'}</span>
             <ChevronDown size={12} className={`transition-transform ${modeDropdownOpen ? 'rotate-180' : ''}`} />
@@ -116,7 +116,7 @@ export function MessageInput({
           <button
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-primary bg-bg-tertiary border border-border hover:bg-bg-hover hover:border-border-hover transition-colors"
             onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-            disabled={models.length === 0}
+            title={models.length === 0 ? 'Connect to load available models' : 'Select AI model'}
           >
             <span>{currentModel?.name || selectedModel || 'Select Model'}</span>
             <ChevronDown size={12} className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />

@@ -12,8 +12,10 @@ import './App.css';
 
 // Available modes
 const AVAILABLE_MODES: ModeInfo[] = [
-  { id: 'ask', name: 'Ask', description: 'Ask questions about code' },
-  { id: 'agent', name: 'Agent', description: 'Autonomous coding agent' },
+  { id: 'agent', name: 'Agent', description: 'Autonomous coding agent that can make changes' },
+  { id: 'ask', name: 'Ask', description: 'Ask questions and get answers about code' },
+  { id: 'edit', name: 'Edit', description: 'Make targeted edits to selected code' },
+  { id: 'plan', name: 'Plan', description: 'Plan and outline coding tasks step by step' },
 ];
 
 function App() {
@@ -26,6 +28,7 @@ function App() {
   const [selectedMode, setSelectedMode] = useState<ChatMode>('ask');
 
   const handleModelsReceived = useCallback((models: ModelInfo[]) => {
+    console.log('Models received in App:', models);
     setAvailableModels(models);
     // Select first model or default model if not already selected
     if (!selectedModel && models.length > 0) {
