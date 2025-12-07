@@ -1,16 +1,18 @@
-import { Plug, Unplug, PlugZap } from 'lucide-react';
+import { Plug, Unplug, PlugZap, Terminal } from 'lucide-react';
 import { ConnectionStatus } from '../types';
 
 interface ToolbarProps {
   connectionStatus: ConnectionStatus;
   onConnect: () => void;
   onDisconnect: () => void;
+  onOpenTerminal?: () => void;
 }
 
 export function Toolbar({
   connectionStatus,
   onConnect,
   onDisconnect,
+  onOpenTerminal,
 }: ToolbarProps) {
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting';
@@ -43,6 +45,23 @@ export function Toolbar({
         title={isConnected ? 'Disconnect from controller' : 'Not connected'}
       >
         <Unplug size={18} />
+      </button>
+
+      {/* Separator */}
+      <div className="w-px h-5 bg-border mx-1" />
+
+      {/* Terminal Button */}
+      <button
+        className={`flex items-center justify-center w-8 h-8 transition-colors ${
+          isConnected
+            ? 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+            : 'text-text-secondary opacity-40 cursor-default'
+        }`}
+        onClick={onOpenTerminal}
+        disabled={!isConnected}
+        title="Open terminal"
+      >
+        <Terminal size={18} />
       </button>
 
       <div className="flex-1" />

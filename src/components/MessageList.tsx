@@ -6,9 +6,11 @@ import { MessageSquare, MessageSquarePlus } from 'lucide-react';
 interface MessageListProps {
   messages: MessageType[];
   onNewChat: () => void;
+  onRetry?: (messageId: string, content: string) => void;
+  onRegenerate?: (messageId: string) => void;
 }
 
-export function MessageList({ messages, onNewChat }: MessageListProps) {
+export function MessageList({ messages, onNewChat, onRetry, onRegenerate }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -40,7 +42,12 @@ export function MessageList({ messages, onNewChat }: MessageListProps) {
         </button>
       </div>
       {messages.map((message) => (
-        <Message key={message.id} message={message} />
+        <Message 
+          key={message.id} 
+          message={message} 
+          onRetry={onRetry}
+          onRegenerate={onRegenerate}
+        />
       ))}
       <div ref={bottomRef} />
     </div>

@@ -7,10 +7,13 @@ import {
   Copy,
   Clipboard,
   Trash2,
-  PanelTop,
-  PanelBottom,
   HelpCircle,
   Info,
+  Star,
+  Smartphone,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 
 interface MenuBarProps {
@@ -21,12 +24,12 @@ interface MenuBarProps {
   onCopy: () => void;
   onPaste: () => void;
   onClearChat: () => void;
-  showToolbar: boolean;
-  showStatusBar: boolean;
-  onToggleToolbar: () => void;
-  onToggleStatusBar: () => void;
   onShowAbout: () => void;
   onShowDocs: () => void;
+  onOpenFavorites: () => void;
+  onOpenSessions: () => void;
+  theme?: 'dark' | 'light' | 'system';
+  onThemeChange?: (theme: 'dark' | 'light' | 'system') => void;
 }
 
 interface MenuProps {
@@ -101,12 +104,12 @@ export function MenuBar({
   onCopy,
   onPaste,
   onClearChat,
-  showToolbar,
-  showStatusBar,
-  onToggleToolbar,
-  onToggleStatusBar,
   onShowAbout,
   onShowDocs,
+  onOpenFavorites,
+  onOpenSessions,
+  theme,
+  onThemeChange,
 }: MenuBarProps) {
   return (
     <div
@@ -131,8 +134,28 @@ export function MenuBar({
         </Menu>
 
         <Menu label="View">
-          <MenuItem icon={<PanelTop size={14} />} label="Toolbar" checked={showToolbar} onClick={onToggleToolbar} />
-          <MenuItem icon={<PanelBottom size={14} />} label="Status Bar" checked={showStatusBar} onClick={onToggleStatusBar} />
+          <MenuItem icon={<Star size={14} />} label="Connections" onClick={onOpenFavorites} />
+          <MenuItem icon={<Smartphone size={14} />} label="Sessions" onClick={onOpenSessions} />
+          <MenuSeparator />
+          <div className="px-2 py-1 text-xs text-text-secondary">Theme</div>
+          <MenuItem 
+            icon={<Sun size={14} />} 
+            label="Light" 
+            onClick={() => onThemeChange?.('light')}
+            checked={theme === 'light'}
+          />
+          <MenuItem 
+            icon={<Moon size={14} />} 
+            label="Dark" 
+            onClick={() => onThemeChange?.('dark')}
+            checked={theme === 'dark'}
+          />
+          <MenuItem 
+            icon={<Monitor size={14} />} 
+            label="System" 
+            onClick={() => onThemeChange?.('system')}
+            checked={theme === 'system'}
+          />
         </Menu>
 
         <Menu label="Help">

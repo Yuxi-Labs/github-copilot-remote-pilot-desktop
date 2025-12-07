@@ -40,3 +40,5 @@ Thumbs.db
 # Rust/Tauri build artifacts
 src-tauri/target/
 **/target/
+
+_docs/design.md

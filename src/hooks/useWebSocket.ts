@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { wsClient } from '../services/websocket';
-import { ConnectionStatus, ControllerMessage, Message, ModelInfo } from '../types';
+import { ConnectionStatus, ControllerMessage, Message, ModelInfo, ChatMode } from '../types';
 import { generateUUID } from '../utils/uuid';
+import { saveChatHistory, loadChatHistory } from '../utils/chatHistory';
+import { ErrorDetails } from '../components/ErrorNotification';
+import { logger } from '../utils/logger';
 
 interface UseWebSocketOptions {
   url: string;
   token: string;
   autoReconnect?: boolean;
   reconnectInterval?: number;
-  onError?: (error: string) => void;
+  onError?: (error: ErrorDetails | string) => void;
   onModelsReceived?: (models: ModelInfo[]) => void;
 }
 
@@ -18,7 +21,10 @@ interface UseWebSocketReturn {
   currentStreamingId: string | null;
   connect: () => void;
   disconnect: () => void;
-  sendMessage: (content: string, model?: string) => void;
+  sendMessage: (content: string, model?: string, includeContext?: boolean, mode?: ChatMode, editOptions?: {
+    targetFile?: string;
+    selection?: { startLine: number; endLine: number; text: string };
+  }) => void;
   cancelMessage: (id: string) => void;
   clearMessages: () => void;
   requestModels: () => void;
@@ -28,20 +34,34 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived } = options;
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // Load chat history on mount
+    return loadChatHistory();
+  });
   const [currentStreamingId, setCurrentStreamingId] = useState<string | null>(null);
 
   // Use ref to track streaming content to avoid stale closure issues
   const streamingContentRef = useRef<Map<string, string>>(new Map());
 
+  // Auto-save chat history whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveChatHistory(messages);
+    }
+  }, [messages]);
+
   const connect = useCallback(() => {
     if (!url || !token) {
-      onError?.('URL and token are required');
+      onError?.({
+        message: 'URL and token are required',
+        type: 'validation',
+        suggestion: 'Please configure your connection settings before connecting.',
+      });
       return;
     }
 
     setConnectionStatus('connecting');
-    wsClient.setAutoReconnect(autoReconnect, reconnectInterval);
+    wsClient.setAutoReconnect(autoReconnect);
 
     wsClient.connect(url, token, {
       onOpen: () => {
@@ -55,16 +75,26 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       },
       onError: () => {
         setConnectionStatus('error');
-        onError?.('Connection failed');
+        onError?.({
+          message: 'Failed to connect to controller',
+          type: 'network',
+          suggestion: 'Check that the Controller for GitHub Copilot extension is running in VS Code and the URL is correct.',
+          canRetry: true,
+        });
       },
       onAuthSuccess: () => {
-        console.log('Authenticated successfully, requesting models...');
+        logger.log('Authenticated successfully, requesting models...');
         // Request available models after authentication
         wsClient.requestModels();
       },
       onAuthError: (error) => {
         setConnectionStatus('error');
-        onError?.(error);
+        onError?.({
+          message: error,
+          type: 'auth',
+          suggestion: 'Generate a new auth token from VS Code (Ctrl+Shift+P → "Controller: Generate Auth Token")',
+          canRetry: true,
+        });
       },
       onMessage: (message: ControllerMessage) => {
         handleControllerMessage(message);
@@ -80,9 +110,23 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     onModelsReceived?.([]);
   }, [onModelsReceived]);
 
-  const sendMessage = useCallback((content: string, model?: string) => {
+  const sendMessage = useCallback((
+    content: string, 
+    model?: string, 
+    includeContext?: boolean,
+    mode?: ChatMode,
+    editOptions?: {
+      targetFile?: string;
+      selection?: { startLine: number; endLine: number; text: string };
+    }
+  ) => {
     if (!wsClient.isConnected()) {
-      onError?.('Not connected');
+      onError?.({
+        message: 'Cannot send message: not connected',
+        type: 'network',
+        suggestion: 'Connect to the controller before sending messages.',
+        canRetry: true,
+      });
       return;
     }
 
@@ -96,7 +140,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setMessages((prev) => [...prev, userMessage]);
 
     // Send to controller and get the message ID
-    const responseId = wsClient.sendChat(content, model);
+    const responseId = wsClient.sendChat(content, model, includeContext, mode, editOptions);
 
     // Create placeholder for assistant response
     const assistantMessage: Message = {
@@ -125,6 +169,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setMessages([]);
     setCurrentStreamingId(null);
     streamingContentRef.current.clear();
+    // Clear from localStorage as well
+    saveChatHistory([]);
   }, []);
 
   const requestModels = useCallback(() => {
@@ -170,24 +216,32 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
             msg.id === message.id
               ? {
                   ...msg,
-                  content: `Error: ${message.payload.error || 'Unknown error'}`,
+                  content: msg.content || 'No response received',
                   isStreaming: false,
+                  hasError: true,
+                  errorMessage: message.payload.error || 'Unknown error',
+                  retryCount: (msg.retryCount || 0),
                 }
               : msg
           )
         );
         setCurrentStreamingId(null);
         streamingContentRef.current.delete(message.id);
-        onError?.(message.payload.error || 'Unknown error');
+        onError?.({
+          message: message.payload.error || 'Unknown error',
+          type: message.payload.code?.startsWith('COPILOT_') ? 'copilot' : 'internal',
+          code: message.payload.code,
+          canRetry: true,
+        });
         break;
 
       case 'status':
-        console.log('Status:', message.payload.message);
+        logger.log('Status:', message.payload.message);
         break;
 
       case 'models':
         if (message.payload.models) {
-          console.log('Models received:', message.payload.models);
+          logger.log('Models received:', message.payload.models);
           onModelsReceived?.(message.payload.models);
         }
         break;
