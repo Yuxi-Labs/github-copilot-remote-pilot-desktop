@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { version as reactVersion } from 'react';
 import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
+import logo from '../../assets/images/gcrp-logo.svg';
 
 interface AboutDialogProps {
   isOpen: boolean;
@@ -39,19 +40,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
         <div className="flex items-start gap-4 px-6 pt-6 pb-5">
           {/* App Icon - squared */}
           <div className="w-[72px] h-[72px] bg-bg-tertiary border border-border flex items-center justify-center flex-shrink-0">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="w-10 h-10 text-text-primary"
-            >
-              <path
-                strokeLinecap="square"
-                strokeLinejoin="miter"
-                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-              />
-            </svg>
+            <img src={logo} alt="Remote Pilot Logo" className="w-16 h-16" />
           </div>
 
           {/* Title + Description */}
