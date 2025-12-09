@@ -183,7 +183,7 @@ function App() {
 
   // Update active branch messages when messages change
   useEffect(() => {
-    if (branchTree) {
+    if (branchTree?.branches) {
       const activeBranch = branchTree.branches.get(branchTree.activeBranchId);
       if (activeBranch) {
         const updatedBranch = { ...activeBranch, messages };
@@ -207,6 +207,11 @@ function App() {
       wsClient.setAutoReconnect(true);
     }
   }, [isOnline, connectionStatus, settings.autoReconnect]);
+
+  // Menu handlers (defined before keyboard shortcuts that use them)
+  const handleExportChat = useCallback(() => {
+    exportChat(messages, 'markdown');
+  }, [messages]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -310,15 +315,10 @@ function App() {
     return () => clearInterval(interval);
   }, [isConnected]);
 
-  // Menu handlers
+  // Other menu handlers
   const handleNewChat = useCallback(() => {
     clearMessages();
   }, [clearMessages]);
-
-  const handleExportChat = useCallback(() => {
-    // Export as markdown by default
-    exportChat(messages, 'markdown');
-  }, [messages]);
 
   const handleExit = useCallback(() => {
     window.close();
@@ -333,7 +333,7 @@ function App() {
 
   // Branch handlers
   const handleCreateBranch = useCallback((messageIndex: number) => {
-    if (!branchTree) return;
+    if (!branchTree?.branches) return;
     
     const activeBranch = branchTree.branches.get(branchTree.activeBranchId);
     if (!activeBranch) return;
@@ -349,7 +349,7 @@ function App() {
   }, [branchTree]);
 
   const handleSwitchBranch = useCallback((branchId: string) => {
-    if (!branchTree) return;
+    if (!branchTree?.branches) return;
     
     const branch = branchTree.branches.get(branchId);
     if (!branch) return;
@@ -511,7 +511,7 @@ function App() {
 
       {/* Chat View */}
       <ChatView
-        messages={branchTree ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
+        messages={branchTree?.branches ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
         onSendMessage={(content, file) => {
           // Build the message content with optional attached file
           let messageContent = content;

@@ -40,11 +40,12 @@ export function BranchManager({
     setEditName('');
   };
 
+  // Early return if branchTree.branches is not a valid Map
+  if (!isOpen || !branchTree?.branches || !(branchTree.branches instanceof Map)) return null;
+
   // Build tree structure for visualization
   const mainBranch = branchTree.branches.get('main');
   const otherBranches = Array.from(branchTree.branches.values()).filter(b => b.id !== 'main');
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
