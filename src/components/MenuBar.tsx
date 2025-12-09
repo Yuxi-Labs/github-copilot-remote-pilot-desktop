@@ -14,6 +14,8 @@ import {
   Sun,
   Moon,
   Monitor,
+  GitBranch,
+  FileCheck,
 } from 'lucide-react';
 
 interface MenuBarProps {
@@ -28,6 +30,9 @@ interface MenuBarProps {
   onShowDocs: () => void;
   onOpenFavorites: () => void;
   onOpenSessions: () => void;
+  onOpenBranchManager: () => void;
+  onOpenChangeApproval: () => void;
+  pendingChangesCount?: number;
   theme?: 'dark' | 'light' | 'system';
   onThemeChange?: (theme: 'dark' | 'light' | 'system') => void;
 }
@@ -108,6 +113,9 @@ export function MenuBar({
   onShowDocs,
   onOpenFavorites,
   onOpenSessions,
+  onOpenBranchManager,
+  onOpenChangeApproval,
+  pendingChangesCount = 0,
   theme,
   onThemeChange,
 }: MenuBarProps) {
@@ -155,6 +163,16 @@ export function MenuBar({
             label="System" 
             onClick={() => onThemeChange?.('system')}
             checked={theme === 'system'}
+          />
+        </Menu>
+
+        <Menu label="Tools">
+          <MenuItem icon={<GitBranch size={14} />} label="Conversation Branches" shortcut="Ctrl+Shift+B" onClick={onOpenBranchManager} />
+          <MenuItem 
+            icon={<FileCheck size={14} />} 
+            label={pendingChangesCount > 0 ? `Pending Changes (${pendingChangesCount})` : "Pending Changes"} 
+            shortcut="Ctrl+Shift+C" 
+            onClick={onOpenChangeApproval} 
           />
         </Menu>
 

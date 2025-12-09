@@ -46,6 +46,18 @@ export interface ToolCall {
   timestamp: number;
 }
 
+// Pending file change awaiting approval
+export interface PendingChange {
+  id: string;
+  type: 'edit' | 'write';
+  path: string;
+  diff: string;
+  additions: number;
+  deletions: number;
+  timestamp: number;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
 // Auth message (special format - token at root level)
 export interface AuthMessage {
   type: 'auth';
@@ -124,7 +136,7 @@ export interface WorkspaceContext {
 // Controller → Client messages
 export interface ControllerMessage {
   id: string;
-  type: 'authRequired' | 'authSuccess' | 'pairPending' | 'pairApproved' | 'pairRejected' | 'chunk' | 'done' | 'error' | 'pong' | 'status' | 'models' | 'context' | 'files' | 'fileContent' | 'writeResult' | 'editResult' | 'openResult' | 'terminalOutput' | 'terminalExit';
+  type: 'authRequired' | 'authSuccess' | 'pairPending' | 'pairApproved' | 'pairRejected' | 'chunk' | 'done' | 'error' | 'toolCall' | 'pendingChange' | 'changeApproved' | 'changeRejected' | 'pong' | 'status' | 'models' | 'context' | 'files' | 'fileContent' | 'writeResult' | 'editResult' | 'openResult' | 'terminalOutput' | 'terminalExit';
   payload: {
     // Pairing responses
     pairingId?: string;
@@ -132,6 +144,14 @@ export interface ControllerMessage {
     sessionToken?: string;
     deviceId?: string;
     reason?: string;
+    
+    // Pending change payload
+    changeId?: string;
+    changeType?: 'edit' | 'write';
+    path?: string;
+    diff?: string;
+    additions?: number;
+    deletions?: number;
     
     // Regular payloads
     content?: string;

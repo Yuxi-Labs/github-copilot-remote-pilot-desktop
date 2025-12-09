@@ -1,4 +1,4 @@
-import { User, Bot, Copy, Check, RefreshCw, AlertCircle, RotateCcw } from 'lucide-react';
+import { User, Bot, Copy, Check, RefreshCw, AlertCircle, RotateCcw, GitBranch } from 'lucide-react';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,11 +9,13 @@ import { ToolCallCard } from './ToolCallCard';
 
 interface MessageProps {
   message: MessageType;
+  messageIndex?: number;
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onBranch?: (messageIndex: number) => void;
 }
 
-export function Message({ message, onRetry, onRegenerate }: MessageProps) {
+export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch }: MessageProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
   const time = new Date(message.timestamp).toLocaleTimeString([], {
@@ -96,37 +98,14 @@ export function Message({ message, onRetry, onRegenerate }: MessageProps) {
                 <span>Regenerate</span>
               </button>
             )}
-          </div>
-        )}
-
-        {/* Tool calls for agent mode */}
-        {message.content && !message.isStreaming && (
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-              title="Copy message"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3 h-3 text-success" />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3 h-3" />
-                  <span>Copy</span>
-                </>
-              )}
-            </button>
-            {!isUser && onRegenerate && !message.hasError && (
+            {onBranch && messageIndex !== undefined && (
               <button
-                onClick={() => onRegenerate(message.id)}
+                onClick={() => onBranch(messageIndex)}
                 className="flex items-center gap-1 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-                title="Regenerate response"
+                title="Create branch from this message"
               >
-                <RotateCcw className="w-3 h-3" />
-                <span>Regenerate</span>
+                <GitBranch className="w-3 h-3" />
+                <span>Branch</span>
               </button>
             )}
           </div>

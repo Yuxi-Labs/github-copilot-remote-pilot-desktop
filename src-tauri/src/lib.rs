@@ -5,16 +5,13 @@ use tauri::State;
 struct SpeechState {
     is_listening: Mutex<bool>,
 }
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
+// Business logic functions (public for testing)
+pub fn greet_impl(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 /// Check if Windows speech recognition is available
-#[tauri::command]
-fn is_speech_available() -> bool {
+pub fn is_speech_available_impl() -> bool {
     #[cfg(windows)]
     {
         true // Windows Speech API is built into Windows 10+
@@ -23,6 +20,17 @@ fn is_speech_available() -> bool {
     {
         false
     }
+}
+
+// Tauri command wrappers (private thin layer)
+#[tauri::command]
+fn greet(name: &str) -> String {
+    greet_impl(name)
+}
+
+#[tauri::command]
+fn is_speech_available() -> bool {
+    is_speech_available_impl()
 }
 
 /// Start listening for speech input
@@ -107,10 +115,59 @@ fn is_listening(state: State<'_, SpeechState>) -> bool {
     state.is_listening.lock().map(|l| *l).unwrap_or(false)
 }
 
+/// Store sensitive data securely (e.g., auth tokens)
+#[tauri::command]
+fn secure_store(key: String, value: String, app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+    
+    let store = app.store("secure.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+    
+    store.set(key, serde_json::Value::String(value));
+    store.save().map_err(|e| format!("Failed to save: {}", e))?;
+    
+    Ok(())
+}
+
+/// Retrieve sensitive data securely
+#[tauri::command]
+fn secure_retrieve(key: String, app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_store::StoreExt;
+    
+    let store = app.store("secure.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+    
+    match store.get(&key) {
+        Some(value) => {
+            if let Some(s) = value.as_str() {
+                Ok(Some(s.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+        None => Ok(None)
+    }
+}
+
+/// Delete sensitive data securely
+#[tauri::command]
+fn secure_delete(key: String, app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+    
+    let store = app.store("secure.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+    
+    store.delete(&key);
+    store.save().map_err(|e| format!("Failed to save: {}", e))?;
+    
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(SpeechState {
             is_listening: Mutex::new(false),
         })
@@ -119,8 +176,13 @@ pub fn run() {
             is_speech_available,
             start_speech_recognition,
             stop_speech_recognition,
-            is_listening
+            is_listening,
+            secure_store,
+            secure_retrieve,
+            secure_delete
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+

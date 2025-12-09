@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { wsClient } from '../services/websocket';
 import { ConnectionStatus, ControllerMessage, Message, ModelInfo, ChatMode } from '../types';
+import { FileChange, ChangeGroup } from '../types/changes';
+import { createFileChange, createChangeGroup } from '../utils/changeTracking';
 import { generateUUID } from '../utils/uuid';
 import { saveChatHistory, loadChatHistory } from '../utils/chatHistory';
 import { ErrorDetails } from '../components/ErrorNotification';
@@ -13,6 +15,7 @@ interface UseWebSocketOptions {
   reconnectInterval?: number;
   onError?: (error: ErrorDetails | string) => void;
   onModelsReceived?: (models: ModelInfo[]) => void;
+  onPendingChange?: (group: ChangeGroup) => void;
 }
 
 interface UseWebSocketReturn {
@@ -28,10 +31,12 @@ interface UseWebSocketReturn {
   cancelMessage: (id: string) => void;
   clearMessages: () => void;
   requestModels: () => void;
+  approveChange: (changeId: string) => void;
+  rejectChange: (changeId: string) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived } = options;
+  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived, onPendingChange } = options;
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -195,6 +200,46 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         }
         break;
 
+      case 'toolCall':
+        // Add or update tool call in the assistant message
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === message.payload.requestId) {
+              const existingToolCalls = msg.toolCalls || [];
+              const toolCallIndex = existingToolCalls.findIndex(tc => tc.id === message.payload.toolCall.id);
+              
+              const updatedToolCalls = toolCallIndex >= 0
+                ? existingToolCalls.map((tc, idx) => idx === toolCallIndex ? message.payload.toolCall : tc)
+                : [...existingToolCalls, message.payload.toolCall];
+              
+              return { ...msg, toolCalls: updatedToolCalls };
+            }
+            return msg;
+          })
+        );
+        break;
+
+      case 'pendingChange':
+        // Handle pending file changes from controller
+        if (message.payload.changeId && message.payload.path) {
+          const change = createFileChange(
+            message.payload.changeType || 'edit',
+            message.payload.path,
+            undefined, // oldContent not provided in protocol yet
+            message.payload.diff
+          );
+          
+          const group = createChangeGroup(
+            message.id,
+            [change],
+            `Changes from ${message.payload.changeType} operation`
+          );
+          
+          onPendingChange?.(group);
+          logger.log('Received pending change:', message.payload);
+        }
+        break;
+
       case 'done':
         const finalContent = message.payload.fullContent ||
           streamingContentRef.current.get(message.id) || '';
@@ -246,7 +291,27 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         }
         break;
     }
-  }, [onError, onModelsReceived]);
+  }, [onError, onModelsReceived, onPendingChange]);
+
+  const approveChange = useCallback((changeId: string) => {
+    if (wsClient.isConnected()) {
+      wsClient.send({
+        type: 'changeApproved',
+        changeId,
+      });
+      logger.log('Approved change:', changeId);
+    }
+  }, []);
+
+  const rejectChange = useCallback((changeId: string) => {
+    if (wsClient.isConnected()) {
+      wsClient.send({
+        type: 'changeRejected',
+        changeId,
+      });
+      logger.log('Rejected change:', changeId);
+    }
+  }, []);
 
   // Sync connection status with wsClient state on mount
   // Don't disconnect on unmount - the singleton connection should persist
@@ -266,5 +331,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     cancelMessage,
     clearMessages,
     requestModels,
+    approveChange,
+    rejectChange,
   };
 }

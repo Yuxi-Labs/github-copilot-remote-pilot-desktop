@@ -76,6 +76,34 @@ export function getFavorites(): ConnectionFavorite[] {
 }
 
 /**
+ * Add a favorite connection (alias for saveConnection with isFavorite=true)
+ */
+export function addFavorite(favorite: Omit<ConnectionFavorite, 'lastUsed' | 'isFavorite'>): ConnectionFavorite {
+  return saveConnection(favorite.name, favorite.url, favorite.token, true);
+}
+
+/**
+ * Remove a favorite connection (alias for deleteConnection)
+ */
+export function removeFavorite(id: string): void {
+  deleteConnection(id);
+}
+
+/**
+ * Update a favorite connection
+ */
+export function updateFavorite(id: string, updates: Partial<Pick<ConnectionFavorite, 'name' | 'url' | 'token'>>): void {
+  const favorites = loadFavorites();
+  const item = favorites.find(f => f.id === id);
+  if (item) {
+    if (updates.name !== undefined) item.name = updates.name;
+    if (updates.url !== undefined) item.url = updates.url;
+    if (updates.token !== undefined) item.token = updates.token;
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  }
+}
+
+/**
  * Get recent connections (non-favorites)
  */
 export function getRecent(): ConnectionFavorite[] {

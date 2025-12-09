@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSettings } from '../../hooks/useSettings';
 
 describe('useSettings', () => {
@@ -29,15 +29,21 @@ describe('useSettings', () => {
     expect(result.current.settings.theme).toBe('light');
   });
 
-  it('should persist settings to localStorage', () => {
+  it('should persist settings to localStorage', async () => {
     const { result } = renderHook(() => useSettings());
 
-    act(() => {
+    await act(async () => {
       result.current.updateSettings({ fontSize: 16 });
+      // Wait for the async save to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
     });
 
     const { result: result2 } = renderHook(() => useSettings());
-    expect(result2.current.settings.fontSize).toBe(16);
+    
+    // Wait for the new hook to load settings
+    await waitFor(() => {
+      expect(result2.current.settings.fontSize).toBe(16);
+    });
   });
 
   it('should reset settings to defaults', () => {

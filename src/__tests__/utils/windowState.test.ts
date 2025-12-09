@@ -13,7 +13,7 @@ describe('windowState', () => {
         height: 768,
         x: 100,
         y: 50,
-        maximized: false
+        isMaximized: false
       };
 
       saveWindowState(state);
@@ -28,13 +28,13 @@ describe('windowState', () => {
         height: 1080,
         x: 0,
         y: 0,
-        maximized: true
+        isMaximized: true
       };
 
       saveWindowState(state);
       const loaded = loadWindowState();
 
-      expect(loaded?.maximized).toBe(true);
+      expect(loaded?.isMaximized).toBe(true);
     });
   });
 
@@ -50,7 +50,7 @@ describe('windowState', () => {
         height: 600,
         x: 200,
         y: 100,
-        maximized: false
+        isMaximized: false
       };
 
       saveWindowState(state);

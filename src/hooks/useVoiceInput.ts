@@ -87,8 +87,8 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInput
       } else {
         setInterimTranscript('');
       }
-    } catch (err: any) {
-      const errorMessage = err?.message || String(err);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       // Don't show error if it was cancelled
       if (!errorMessage.includes('cancelled') && !errorMessage.includes('Already listening')) {
         setError(errorMessage);

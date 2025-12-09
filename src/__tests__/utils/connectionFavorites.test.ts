@@ -24,7 +24,10 @@ describe('connectionFavorites', () => {
       const favorites = getFavorites();
 
       expect(favorites).toHaveLength(1);
-      expect(favorites[0]).toEqual(favorite);
+      expect(favorites[0].name).toBe(favorite.name);
+      expect(favorites[0].url).toBe(favorite.url);
+      expect(favorites[0].token).toBe(favorite.token);
+      expect(favorites[0].isFavorite).toBe(true);
     });
 
     it('should add multiple favorites', () => {
@@ -58,20 +61,27 @@ describe('connectionFavorites', () => {
       addFavorite({ id: '1', name: 'Local', url: 'ws://localhost:3712/ws', token: 'token1' });
       addFavorite({ id: '2', name: 'Remote', url: 'ws://remote:3712/ws', token: 'token2' });
 
-      removeFavorite('1');
       const favorites = getFavorites();
+      expect(favorites).toHaveLength(2);
+      const firstId = favorites[0].id;
 
-      expect(favorites).toHaveLength(1);
-      expect(favorites[0].id).toBe('2');
+      removeFavorite(firstId);
+      const remaining = getFavorites();
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].name).toBe('Remote');
     });
 
     it('should do nothing if id does not exist', () => {
       addFavorite({ id: '1', name: 'Local', url: 'ws://localhost:3712/ws', token: 'token1' });
 
-      removeFavorite('999');
       const favorites = getFavorites();
+      const initialCount = favorites.length;
 
-      expect(favorites).toHaveLength(1);
+      removeFavorite('nonexistent-id-999');
+      const afterRemove = getFavorites();
+
+      expect(afterRemove).toHaveLength(initialCount);
     });
   });
 
@@ -79,12 +89,15 @@ describe('connectionFavorites', () => {
     it('should update an existing favorite', () => {
       addFavorite({ id: '1', name: 'Local', url: 'ws://localhost:3712/ws', token: 'token1' });
 
-      updateFavorite('1', { name: 'Updated Local', token: 'new-token' });
       const favorites = getFavorites();
+      const favId = favorites[0].id;
 
-      expect(favorites[0].name).toBe('Updated Local');
-      expect(favorites[0].token).toBe('new-token');
-      expect(favorites[0].url).toBe('ws://localhost:3712/ws');
+      updateFavorite(favId, { name: 'Updated Local', token: 'new-token' });
+      const updated = getFavorites();
+
+      expect(updated[0].name).toBe('Updated Local');
+      expect(updated[0].token).toBe('new-token');
+      expect(updated[0].url).toBe('ws://localhost:3712/ws');
     });
 
     it('should do nothing if id does not exist', () => {

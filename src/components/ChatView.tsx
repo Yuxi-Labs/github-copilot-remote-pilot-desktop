@@ -1,4 +1,4 @@
-import { Message, ModelInfo, ModeInfo, ChatMode } from '../types';
+import { type Message, type ModelInfo, type ModeInfo, type ChatMode } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
@@ -12,6 +12,7 @@ interface ChatViewProps {
   onSendMessage: (content: string, attachedFile?: AttachedFile) => void;
   onCancelMessage?: () => void;
   onNewChat: () => void;
+  onBranch?: (messageIndex: number) => void;
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
   isConnected: boolean;
@@ -36,6 +37,7 @@ export function ChatView({
   onSendMessage,
   onCancelMessage,
   onNewChat,
+  onBranch,
   isConnected,
   isStreaming,
   models,
@@ -59,6 +61,7 @@ export function ChatView({
       <MessageList 
         messages={messages} 
         onNewChat={onNewChat} 
+        onBranch={onBranch}
         onRetry={onRetry}
         onRegenerate={onRegenerate}
       />

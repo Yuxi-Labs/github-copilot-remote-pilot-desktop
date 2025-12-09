@@ -34,8 +34,30 @@ export class WebSocketClient {
   private lastPingTime: number = 0;
   private latency: number = 0;
   private latencyHistory: number[] = [];
+  private isNetworkOnline: boolean = true;
 
-  constructor() {}
+  constructor() {
+    // Listen for network status changes
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        logger.log('Network online - resuming reconnection if needed');
+        this.isNetworkOnline = true;
+        // If we're disconnected and should reconnect, try now
+        if (this.autoReconnect && !this.ws && this.url && this.token) {
+          this.connect(this.url, this.token, this.handlers);
+        }
+      });
+      window.addEventListener('offline', () => {
+        logger.log('Network offline - pausing reconnection');
+        this.isNetworkOnline = false;
+        // Cancel any pending reconnect
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+      });
+    }
+  }
 
   /**
    * Connect to the controller
@@ -558,6 +580,12 @@ export class WebSocketClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+
+    // Don't reconnect if network is offline
+    if (!this.isNetworkOnline) {
+      logger.log('Network offline - skipping reconnect');
+      return;
+    }
 
     // Check if we've exceeded max attempts
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {

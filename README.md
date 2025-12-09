@@ -1,6 +1,18 @@
 # Remote Pilot for GitHub Copilot
 
-A native desktop application that connects to the Controller for GitHub Copilot VS Code extension, enabling chat with GitHub Copilot from outside VS Code.
+Production-ready Tauri desktop application for controlling GitHub Copilot remotely.
+
+## Features
+
+- ✅ WebSocket connection to controller
+- ✅ Real-time chat with GitHub Copilot
+- ✅ Multiple interaction modes (agent, edit, plan)
+- ✅ **Change Approval System** - Review and approve file changes before applying
+- ✅ Conversation branching - Fork discussions to explore alternatives
+- ✅ Chat history persistence (IndexedDB)
+- ✅ Secure credential storage (OS keychain)
+- ✅ Theme support (light/dark/system)
+- ✅ Comprehensive test coverage (125+ tests)
 
 ## Installation
 
@@ -15,7 +27,16 @@ npm install
 npm run tauri build
 ```
 
-## Usage
+## Quick Start
+
+### Development
+```bash
+npm run dev          # Start dev server
+npm test            # Run all tests
+npm run test:e2e    # E2E tests with Playwright
+```
+
+### Usage
 
 1. Install and start [Controller for GitHub Copilot](https://github.com/Yuxi-Labs/vscode-github-copilot-controller) in VS Code
 2. In VS Code, run `Copilot Controller: Copy Connection Info`

@@ -10,6 +10,25 @@ import { saveConnection } from './utils/connectionFavorites';
 import { getDeviceName } from './utils/devicePairing';
 import { exportChat } from './utils/storage';
 import { logger } from './utils/logger';
+import { 
+  BranchTree, 
+  createBranch, 
+  createInitialBranchTree, 
+  saveBranchTree, 
+  loadBranchTree, 
+  deleteBranch, 
+  renameBranch 
+} from './utils/conversationBranching';
+import { 
+  loadPendingChanges, 
+  savePendingChanges, 
+  approveChange, 
+  rejectChange, 
+  approveAllChanges, 
+  rejectAllChanges, 
+  removeChangeGroup 
+} from './utils/changeTracking';
+import { ChangeGroup } from './types/changes';
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { StatusBar } from './components/StatusBar';
@@ -22,8 +41,10 @@ import { Terminal } from './components/Terminal';
 import { FavoritesSidebar } from './components/FavoritesSidebar';
 import { PairingDialog } from './components/PairingDialog';
 import { SessionManagementDialog } from './components/SessionManagementDialog';
+import { BranchManager } from './components/BranchManager';
+import { ChangeApprovalDialog } from './components/ChangeApprovalDialog';
 import { ErrorNotification, ErrorDetails } from './components/ErrorNotification';
-import { ModelInfo, ModeInfo, ChatMode } from './types';
+import { type ModelInfo, type ModeInfo, type ChatMode } from './types';
 import './App.css';
 
 // Available modes
@@ -47,6 +68,10 @@ function App() {
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [branchManagerOpen, setBranchManagerOpen] = useState(false);
+  const [branchTree, setBranchTree] = useState<BranchTree | null>(null);
+  const [changeApprovalOpen, setChangeApprovalOpen] = useState(false);
+  const [pendingChangeGroups, setPendingChangeGroups] = useState<ChangeGroup[]>([]);
   const [pairingStatus, setPairingStatus] = useState<'requesting' | 'pending' | 'approved' | 'rejected' | 'error'>('requesting');
   const [pairingId, setPairingId] = useState<string>();
   const [pairingError, setPairingError] = useState<string>();
@@ -88,6 +113,23 @@ function App() {
     }
   }, []);
 
+  const handlePendingChange = useCallback((group: ChangeGroup) => {
+    setPendingChangeGroups(prev => {
+      // Check if group already exists
+      const existing = prev.find(g => g.id === group.id);
+      if (existing) {
+        return prev.map(g => g.id === group.id ? group : g);
+      }
+      return [...prev, group];
+    });
+    savePendingChanges([...pendingChangeGroups, group]);
+    
+    // Auto-open change approval dialog if not already open
+    if (!changeApprovalOpen) {
+      setChangeApprovalOpen(true);
+    }
+  }, [pendingChangeGroups, changeApprovalOpen]);
+
   const {
     connectionStatus,
     messages,
@@ -97,12 +139,15 @@ function App() {
     sendMessage,
     cancelMessage,
     clearMessages,
+    approveChange: wsApproveChange,
+    rejectChange: wsRejectChange,
   } = useWebSocket({
     url: settings.connectionUrl,
     token: settings.authToken,
     autoReconnect: settings.autoReconnect,
     onError: setError,
     onModelsReceived: handleModelsReceived,
+    onPendingChange: handlePendingChange,
   });
 
   const isConnected = connectionStatus === 'connected';
@@ -116,6 +161,41 @@ function App() {
       saveConnection(name, settings.connectionUrl, settings.authToken, false);
     }
   }, [isConnected, settings.connectionUrl, settings.authToken]);
+
+  // Initialize branch tree on mount
+  useEffect(() => {
+    const initBranches = () => {
+      const loaded = loadBranchTree();
+      if (loaded) {
+        setBranchTree(loaded);
+      } else {
+        setBranchTree(createInitialBranchTree(messages));
+      }
+    };
+    initBranches();
+  }, []);
+
+  // Load pending changes on mount
+  useEffect(() => {
+    const groups = loadPendingChanges();
+    setPendingChangeGroups(groups);
+  }, []);
+
+  // Update active branch messages when messages change
+  useEffect(() => {
+    if (branchTree) {
+      const activeBranch = branchTree.branches.get(branchTree.activeBranchId);
+      if (activeBranch) {
+        const updatedBranch = { ...activeBranch, messages };
+        const newTree = {
+          ...branchTree,
+          branches: new Map(branchTree.branches).set(branchTree.activeBranchId, updatedBranch),
+        };
+        setBranchTree(newTree);
+        saveBranchTree(newTree);
+      }
+    }
+  }, [messages]);
 
   // Pause auto-reconnect when offline
   useEffect(() => {
@@ -146,6 +226,36 @@ function App() {
         e.preventDefault();
         setSettingsOpen(true);
       }
+      // Ctrl+E: Export Chat
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        handleExportChat();
+      }
+      // F1: Documentation
+      if (e.key === 'F1') {
+        e.preventDefault();
+        window.open('https://github.com/Yuxi-Labs/vscode-github-copilot-controller', '_blank');
+      }
+      // Ctrl+B: Toggle File Browser
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        setFileBrowserOpen(!fileBrowserOpen);
+      }
+      // Ctrl+`: Toggle Terminal
+      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault();
+        setTerminalOpen(!terminalOpen);
+      }
+      // Ctrl+Shift+B: Toggle Branch Manager
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'B') {
+        e.preventDefault();
+        setBranchManagerOpen(!branchManagerOpen);
+      }
+      // Ctrl+Shift+C: Toggle Change Approval
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        setChangeApprovalOpen(!changeApprovalOpen);
+      }
       // Escape: Cancel current request or close dialogs
       if (e.key === 'Escape') {
         if (currentStreamingId) {
@@ -162,13 +272,17 @@ function App() {
           setFavoritesOpen(false);
         } else if (sessionsOpen) {
           setSessionsOpen(false);
+        } else if (branchManagerOpen) {
+          setBranchManagerOpen(false);
+        } else if (changeApprovalOpen) {
+          setChangeApprovalOpen(false);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentStreamingId, cancelMessage, clearMessages, settingsOpen, aboutOpen, fileBrowserOpen, terminalOpen, favoritesOpen, sessionsOpen]);
+  }, [currentStreamingId, cancelMessage, clearMessages, settingsOpen, aboutOpen, fileBrowserOpen, terminalOpen, favoritesOpen, sessionsOpen, handleExportChat]);
 
   // Send battery and bandwidth optimization to controller
   useEffect(() => {
@@ -216,6 +330,87 @@ function App() {
       navigator.clipboard.writeText(selection);
     }
   }, []);
+
+  // Branch handlers
+  const handleCreateBranch = useCallback((messageIndex: number) => {
+    if (!branchTree) return;
+    
+    const activeBranch = branchTree.branches.get(branchTree.activeBranchId);
+    if (!activeBranch) return;
+    
+    const newBranch = createBranch(activeBranch, messageIndex);
+    const newTree = {
+      branches: new Map(branchTree.branches).set(newBranch.id, newBranch),
+      activeBranchId: newBranch.id,
+    };
+    
+    setBranchTree(newTree);
+    saveBranchTree(newTree);
+  }, [branchTree]);
+
+  const handleSwitchBranch = useCallback((branchId: string) => {
+    if (!branchTree) return;
+    
+    const branch = branchTree.branches.get(branchId);
+    if (!branch) return;
+    
+    const newTree = {
+      ...branchTree,
+      activeBranchId: branchId,
+    };
+    
+    setBranchTree(newTree);
+    saveBranchTree(newTree);
+    setBranchManagerOpen(false);
+  }, [branchTree]);
+
+  const handleDeleteBranch = useCallback((branchId: string) => {
+    if (!branchTree) return;
+    
+    const newTree = deleteBranch(branchTree, branchId);
+    setBranchTree(newTree);
+    saveBranchTree(newTree);
+  }, [branchTree]);
+
+  const handleRenameBranch = useCallback((branchId: string, newName: string) => {
+    if (!branchTree) return;
+    
+    const newTree = renameBranch(branchTree, branchId, newName);
+    setBranchTree(newTree);
+    saveBranchTree(newTree);
+  }, [branchTree]);
+
+  const handleApproveChange = useCallback((groupId: string, changeId: string) => {
+    approveChange(groupId, changeId);
+    wsApproveChange(changeId);
+    setPendingChangeGroups(loadPendingChanges());
+  }, [wsApproveChange]);
+
+  const handleRejectChange = useCallback((groupId: string, changeId: string) => {
+    rejectChange(groupId, changeId);
+    wsRejectChange(changeId);
+    setPendingChangeGroups(loadPendingChanges());
+  }, [wsRejectChange]);
+
+  const handleApproveAllChanges = useCallback((groupId: string) => {
+    approveAllChanges(groupId);
+    const groups = loadPendingChanges();
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      group.changes.forEach(change => wsApproveChange(change.id));
+    }
+    setPendingChangeGroups(loadPendingChanges());
+  }, [wsApproveChange]);
+
+  const handleRejectAllChanges = useCallback((groupId: string) => {
+    rejectAllChanges(groupId);
+    const groups = loadPendingChanges();
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      group.changes.forEach(change => wsRejectChange(change.id));
+    }
+    setPendingChangeGroups(loadPendingChanges());
+  }, [wsRejectChange]);
 
   const handlePaste = useCallback(async () => {
     // Paste is handled natively by the textarea
@@ -288,6 +483,11 @@ function App() {
         onShowDocs={handleShowDocs}
         onOpenFavorites={() => setFavoritesOpen(true)}
         onOpenSessions={() => setSessionsOpen(true)}
+        onOpenBranchManager={() => setBranchManagerOpen(true)}
+        onOpenChangeApproval={() => setChangeApprovalOpen(true)}
+        pendingChangesCount={pendingChangeGroups.reduce((count, group) => {
+          return count + group.changes.filter(c => c.status === 'pending').length;
+        }, 0)}
         theme={theme}
         onThemeChange={setTheme}
       />
@@ -311,7 +511,7 @@ function App() {
 
       {/* Chat View */}
       <ChatView
-        messages={messages}
+        messages={branchTree ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
         onSendMessage={(content, file) => {
           // Build the message content with optional attached file
           let messageContent = content;
@@ -324,6 +524,7 @@ function App() {
         }}
         onCancelMessage={handleCancelMessage}
         onNewChat={handleNewChat}
+        onBranch={handleCreateBranch}
         isConnected={isConnected}
         isStreaming={isStreaming}
         models={availableModels}
@@ -379,6 +580,28 @@ function App() {
       <SessionManagementDialog
         isOpen={sessionsOpen}
         onClose={() => setSessionsOpen(false)}
+      />
+
+      {/* Branch Manager */}
+      {branchTree && (
+        <BranchManager
+          isOpen={branchManagerOpen}
+          branchTree={branchTree}
+          onSwitchBranch={handleSwitchBranch}
+          onDeleteBranch={handleDeleteBranch}
+          onRenameBranch={handleRenameBranch}
+          onClose={() => setBranchManagerOpen(false)}
+        />
+      )}
+
+      {/* Change Approval Dialog */}
+      <ChangeApprovalDialog
+        groups={pendingChangeGroups}
+        onApprove={handleApproveChange}
+        onReject={handleRejectChange}
+        onApproveAll={handleApproveAllChanges}
+        onRejectAll={handleRejectAllChanges}
+        onClose={() => setChangeApprovalOpen(false)}
       />
 
       {/* File Browser */}

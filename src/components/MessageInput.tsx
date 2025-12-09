@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react';
 import { Send, StopCircle, ChevronDown, FileCode, FolderOpen, X, Mic, MicOff, Terminal, Upload } from 'lucide-react';
-import { ModelInfo, ModeInfo, ChatMode } from '../types';
+import { type ModelInfo, type ModeInfo, type ChatMode } from '../types';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 
 interface AttachedFile {
@@ -298,7 +298,7 @@ export function MessageInput({
       )}
 
       {/* Input row */}
-      <div className="flex gap-3 items-end">
+      <div className="flex gap-3 items-center">
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -325,7 +325,7 @@ export function MessageInput({
         <button
           onClick={handleVoiceToggle}
           disabled={disabled || isStreaming || !isVoiceSupported}
-          className={`action-button flex items-center justify-center w-10 h-10 ${
+          className={`action-button flex items-center justify-center w-10 min-h-[2.75rem] ${
             isListening
               ? 'action-button-primary animate-pulse'
               : ''
@@ -338,7 +338,7 @@ export function MessageInput({
         {isStreaming ? (
           <button
             onClick={onCancel}
-            className="flex items-center justify-center w-10 h-10 bg-error text-white hover:bg-error/90 transition-all"
+            className="flex items-center justify-center w-10 min-h-[2.75rem] bg-error text-white hover:bg-error/90 transition-all"
             title="Stop generating"
           >
             <StopCircle size={18} />
@@ -347,7 +347,7 @@ export function MessageInput({
           <button
             onClick={handleSend}
             disabled={!message.trim() || disabled}
-            className="action-button-primary flex items-center justify-center w-10 h-10"
+            className="action-button-primary flex items-center justify-center w-10 min-h-[2.75rem]"
             title="Send message (Ctrl+Enter)"
           >
             <Send size={18} />

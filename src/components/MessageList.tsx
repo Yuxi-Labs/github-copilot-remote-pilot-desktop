@@ -8,9 +8,10 @@ interface MessageListProps {
   onNewChat: () => void;
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onBranch?: (messageIndex: number) => void;
 }
 
-export function MessageList({ messages, onNewChat, onRetry, onRegenerate }: MessageListProps) {
+export function MessageList({ messages, onNewChat, onRetry, onRegenerate, onBranch }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -41,12 +42,14 @@ export function MessageList({ messages, onNewChat, onRetry, onRegenerate }: Mess
           <span>New Chat</span>
         </button>
       </div>
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <Message 
           key={message.id} 
           message={message} 
+          messageIndex={index}
           onRetry={onRetry}
           onRegenerate={onRegenerate}
+          onBranch={onBranch}
         />
       ))}
       <div ref={bottomRef} />
