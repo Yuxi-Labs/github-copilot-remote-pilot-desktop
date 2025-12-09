@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   Branch,
-  BranchTree,
   createBranch,
   saveBranchTree,
   loadBranchTree,
@@ -38,8 +37,8 @@ describe('conversationBranching', () => {
       const mainBranch: Branch = {
         id: 'main',
         name: 'Main',
-        parentId: null,
-        parentMessageIndex: -1,
+        parentBranchId: null,
+        branchPointIndex: -1,
         messages: mockMessages,
         createdAt: Date.now(),
       };

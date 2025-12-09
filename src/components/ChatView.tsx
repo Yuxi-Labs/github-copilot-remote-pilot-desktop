@@ -1,15 +1,16 @@
-import { type Message, type ModelInfo, type ModeInfo, type ChatMode } from '../types';
+import { type Message, type ModelInfo, type ModeInfo, type ChatMode, type ContextFile } from '../types';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 
-interface AttachedFile {
+interface ContextItem {
+  type: 'file' | 'selection' | 'terminal' | 'workspace';
   name: string;
-  content: string;
+  preview?: string;
 }
 
 interface ChatViewProps {
   messages: Message[];
-  onSendMessage: (content: string, attachedFile?: AttachedFile) => void;
+  onSendMessage: (content: string) => void;
   onCancelMessage?: () => void;
   onNewChat: () => void;
   onBranch?: (messageIndex: number) => void;
@@ -17,6 +18,7 @@ interface ChatViewProps {
   onRegenerate?: (messageId: string) => void;
   isConnected: boolean;
   isStreaming: boolean;
+  streamingStatus?: string;
   models: ModelInfo[];
   selectedModel: string;
   onModelChange: (modelId: string) => void;
@@ -25,11 +27,12 @@ interface ChatViewProps {
   onModeChange: (mode: ChatMode) => void;
   includeContext: boolean;
   onIncludeContextChange: (include: boolean) => void;
-  onOpenFileBrowser?: () => void;
   onOpenTerminal?: () => void;
-  attachedFile?: AttachedFile | null;
-  onAttachFile?: (file: AttachedFile) => void;
-  onRemoveAttachedFile?: () => void;
+  activeContext?: ContextItem[];
+  contextFiles: ContextFile[];
+  onToggleContextFile: (id: string) => void;
+  onRemoveContextFile: (id: string) => void;
+  onAttachManual: () => void;
 }
 
 export function ChatView({
@@ -40,24 +43,23 @@ export function ChatView({
   onBranch,
   isConnected,
   isStreaming,
+  streamingStatus,
   models,
   selectedModel,
   onModelChange,
   modes,
   selectedMode,
   onModeChange,
-  includeContext,
-  onIncludeContextChange,
-  onOpenFileBrowser,
-  onOpenTerminal,
-  attachedFile,
-  onAttachFile,
-  onRemoveAttachedFile,
   onRetry,
   onRegenerate,
+  activeContext,
+  contextFiles,
+  onToggleContextFile,
+  onRemoveContextFile,
+  onAttachManual,
 }: ChatViewProps) {
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary">
+    <div className="h-full flex flex-col overflow-hidden bg-bg-primary">
       <MessageList 
         messages={messages} 
         onNewChat={onNewChat} 
@@ -65,11 +67,13 @@ export function ChatView({
         onRetry={onRetry}
         onRegenerate={onRegenerate}
       />
+      
       <MessageInput
         onSend={onSendMessage}
         onCancel={onCancelMessage}
         disabled={!isConnected}
         isStreaming={isStreaming}
+        streamingStatus={streamingStatus}
         isConnected={isConnected}
         models={models}
         selectedModel={selectedModel}
@@ -77,13 +81,10 @@ export function ChatView({
         modes={modes}
         selectedMode={selectedMode}
         onModeChange={onModeChange}
-        includeContext={includeContext}
-        onIncludeContextChange={onIncludeContextChange}
-        onOpenFileBrowser={onOpenFileBrowser}
-        onOpenTerminal={onOpenTerminal}
-        attachedFile={attachedFile}
-        onAttachFile={onAttachFile}
-        onRemoveAttachedFile={onRemoveAttachedFile}
+        contextFiles={contextFiles}
+        onToggleContextFile={onToggleContextFile}
+        onRemoveContextFile={onRemoveContextFile}
+        onAttachManual={onAttachManual}
       />
     </div>
   );

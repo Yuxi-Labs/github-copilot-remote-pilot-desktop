@@ -42,11 +42,11 @@ export function FileEditor({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
       
-      // Ctrl/Cmd + S to save
+      // Ctrl/Cmd + S to apply changes
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         if (hasChanges && !saving) {
-          handleSave();
+          handleApplyChanges();
         }
       }
       
@@ -60,28 +60,51 @@ export function FileEditor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, hasChanges, saving]);
 
-  const handleSave = useCallback(() => {
+  const handleApplyChanges = useCallback(() => {
     if (!hasChanges || saving) return;
 
     setSaving(true);
     setError(null);
 
-    const requestId = wsClient.writeFile(filePath, content);
+    // Send changes to Copilot to implement
+    const changeDescription = `Update the file ${fileName} with these changes:
+
+Original content:
+${originalContent}
+
+New content:
+${content}
+
+Please analyze the differences and apply the appropriate code changes.`;
+
+    const requestId = wsClient.sendMessage({
+      type: 'chat',
+      id: `apply-changes-${Date.now()}`,
+      payload: {
+        message: changeDescription,
+        mode: 'agent',
+        attachedFiles: [{
+          name: fileName,
+          path: filePath,
+          content: originalContent
+        }]
+      }
+    });
 
     const handleMessage = (msg: ControllerMessage) => {
       if (msg.id === requestId) {
-        wsClient.removeMessageHandler(handleMessage);
-        setSaving(false);
-
-        if (msg.type === 'writeResult' && msg.payload.success) {
-          setSaved(true);
-          onSaved?.();
-          // Auto-close after successful save (optional)
-          // setTimeout(onClose, 500);
+        if (msg.type === 'chatChunk' || msg.type === 'chatComplete') {
+          // Copilot processed the changes
+          if (msg.type === 'chatComplete') {
+            wsClient.removeMessageHandler(handleMessage);
+            setSaving(false);
+            setSaved(true);
+            onSaved?.();
+          }
         } else if (msg.type === 'error') {
-          setError(msg.payload.message || 'Failed to save file');
-        } else if (msg.type === 'writeResult' && !msg.payload.success) {
-          setError(msg.payload.error || 'Failed to save file');
+          wsClient.removeMessageHandler(handleMessage);
+          setSaving(false);
+          setError(msg.payload.message || 'Failed to apply changes via Copilot');
         }
       }
     };
@@ -141,100 +164,76 @@ export function FileEditor({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bg-primary border border-border w-[90vw] h-[85vh] max-w-[1200px] flex flex-col shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-secondary">
-          <div className="flex items-center gap-3">
-            <FileCode size={16} className="text-accent" />
-            <div>
-              <span className="text-sm font-medium text-text-primary">{fileName}</span>
-              <span className="text-xs text-text-secondary ml-2">{filePath}</span>
-            </div>
-            {hasChanges && (
-              <span className="text-xs text-warning px-1.5 py-0.5 bg-warning/10">
-                Modified
-              </span>
-            )}
-            {saved && !hasChanges && (
-              <span className="text-xs text-success px-1.5 py-0.5 bg-success/10">
-                Saved
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenInVSCode}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-              title="Open in VS Code"
-            >
-              <ExternalLink size={14} />
-              <span>Open in VS Code</span>
-            </button>
-            <button
-              onClick={handleClose}
-              className="p-1 hover:bg-bg-hover transition-colors"
-              title="Close"
-            >
-              <X size={18} className="text-text-secondary hover:text-text-primary" />
-            </button>
-          </div>
-        </div>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Editor */}
+      <div className="flex-1 overflow-hidden">
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => {
+            setContent(e.target.value);
+            setSaved(false);
+          }}
+          onKeyDown={handleKeyDown}
+          className="w-full h-full p-4 bg-bg-primary text-text-primary font-mono text-sm resize-none focus:outline-none"
+          spellCheck={false}
+          placeholder="File content..."
+        />
+      </div>
 
-        {/* Editor */}
-        <div className="flex-1 overflow-hidden">
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setSaved(false);
-            }}
-            onKeyDown={handleKeyDown}
-            className="w-full h-full p-4 bg-bg-primary text-text-primary font-mono text-sm resize-none focus:outline-none"
-            spellCheck={false}
-            placeholder="File content..."
-          />
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-bg-secondary">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-secondary">
-              {language}
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-bg-secondary">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-text-secondary">
+            {language}
+          </span>
+          <span className="text-xs text-text-secondary">
+            • {content.split('\n').length} lines
+          </span>
+          <span className="text-xs text-text-secondary">
+            • {content.length} chars
+          </span>
+          {hasChanges && (
+            <span className="text-xs text-warning px-1.5 py-0.5 bg-warning/10 rounded">
+              Modified
             </span>
-            <span className="text-xs text-text-secondary">
-              • {content.split('\n').length} lines
-            </span>
-            <span className="text-xs text-text-secondary">
-              • {content.length} chars
-            </span>
-          </div>
-
-          {error && (
-            <span className="text-xs text-error">{error}</span>
           )}
+          {saved && !hasChanges && (
+            <span className="text-xs text-success px-1.5 py-0.5 bg-success/10 rounded">
+              Saved
+            </span>
+          )}
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRevert}
-              disabled={!hasChanges || saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Revert changes"
-            >
-              <RotateCcw size={14} />
-              <span>Revert</span>
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title="Save changes (Ctrl+S)"
-            >
-              <Save size={14} />
-              <span>{saving ? 'Saving...' : 'Save'}</span>
-            </button>
-          </div>
+        {error && (
+          <span className="text-xs text-error">{error}</span>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenInVSCode}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            title="Open in VS Code"
+          >
+            <ExternalLink size={14} />
+          </button>
+          <button
+            onClick={handleRevert}
+            disabled={!hasChanges || saving}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Revert changes"
+          >
+            <RotateCcw size={14} />
+          </button>
+          <button
+            onClick={handleApplyChanges}
+            disabled={!hasChanges || saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Apply changes via Copilot (Ctrl+S)"
+          >
+            <Save size={14} />
+            <span>{saving ? 'Applying...' : 'Apply Changes'}</span>
+          </button>
         </div>
       </div>
     </div>

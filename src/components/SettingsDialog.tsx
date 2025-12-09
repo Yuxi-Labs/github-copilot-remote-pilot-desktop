@@ -8,13 +8,14 @@ interface SettingsDialogProps {
   settings: Settings;
   onSave: (settings: Partial<Settings>) => void;
   onReset: () => void;
+  initialTab?: SettingsTab;
 }
 
 type SettingsTab = 'connection' | 'terminal' | 'appearance';
 
-export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: SettingsDialogProps) {
+export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset, initialTab }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState(settings);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('connection');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'connection');
   const [urlError, setUrlError] = useState<string>('');
   const [tokenError, setTokenError] = useState<string>('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -24,13 +25,13 @@ export function SettingsDialog({ isOpen, onClose, settings, onSave, onReset }: S
   useEffect(() => {
     if (isOpen) {
       setLocalSettings(settings);
-      setActiveTab('connection');
+      setActiveTab(initialTab || 'connection');
       setUrlError('');
       setTokenError('');
       setTestStatus('idle');
       setTestMessage('');
     }
-  }, [isOpen, settings]);
+  }, [isOpen, settings, initialTab]);
 
   if (!isOpen) return null;
 

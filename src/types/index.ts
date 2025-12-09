@@ -169,6 +169,8 @@ export interface ControllerMessage {
     path?: string;
     entries?: FileEntry[];
     workspaceName?: string;
+    workspaceId?: string;
+    workspaceUri?: string;
     // FileContent payload
     fileName?: string;
     language?: string;
@@ -192,6 +194,16 @@ export interface FileEntry {
   type: 'file' | 'directory';
   size?: number;
   language?: string;
+}
+
+// Context file types
+export interface ContextFile {
+  id: string;
+  name: string;
+  path: string;
+  content: string;
+  enabled: boolean;  // Toggle visibility in context
+  isAuto: boolean;   // Auto-attached vs. manual
 }
 
 // File editing types

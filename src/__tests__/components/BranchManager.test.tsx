@@ -6,8 +6,8 @@ import { BranchTree } from '../../utils/conversationBranching';
 describe('BranchManager', () => {
   const mockBranchTree: BranchTree = {
     branches: new Map([
-      ['main', { id: 'main', name: 'Main', parentId: null, parentMessageIndex: -1, messages: [], createdAt: Date.now() }],
-      ['branch1', { id: 'branch1', name: 'Feature Branch', parentId: 'main', parentMessageIndex: 2, messages: [], createdAt: Date.now() }],
+      ['main', { id: 'main', name: 'Main', parentBranchId: null, branchPointIndex: -1, messages: [], createdAt: Date.now() }],
+      ['branch1', { id: 'branch1', name: 'Feature Branch', parentBranchId: 'main', branchPointIndex: 2, messages: [], createdAt: Date.now() }],
     ]),
     activeBranchId: 'main',
   };

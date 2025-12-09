@@ -22,6 +22,124 @@ pub fn is_speech_available_impl() -> bool {
     }
 }
 
+/// Get available shells on the local system
+pub fn get_available_shells_impl() -> Vec<String> {
+    let mut shells = Vec::new();
+
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        
+        // Use PowerShell to find all executables in PATH that could be shells
+        let output = Command::new("powershell")
+            .args(&[
+                "-NoProfile",
+                "-Command",
+                r#"
+                $shells = @()
+                
+                # Get all executables from PATH
+                $env:PATH -split ';' | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object {
+                    Get-ChildItem -Path $_ -Filter *.exe -ErrorAction SilentlyContinue | ForEach-Object {
+                        $name = $_.BaseName.ToLower()
+                        # Common shell patterns
+                        if ($name -match '^(pwsh|powershell|cmd|bash|sh|zsh|fish|nu|elvish|xonsh|ion|ksh|tcsh|csh|dash|ash)$') {
+                            $shells += $name
+                        }
+                    }
+                }
+                
+                # Check Windows Terminal profiles for additional shells
+                $wtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+                if (Test-Path $wtSettingsPath) {
+                    try {
+                        $content = Get-Content $wtSettingsPath -Raw | ConvertFrom-Json
+                        foreach ($profile in $content.profiles.list) {
+                            if ($profile.commandline) {
+                                $cmd = $profile.commandline -replace '"', '' -split ' ' | Select-Object -First 1
+                                $shellName = Split-Path $cmd -Leaf
+                                $shellName = $shellName -replace '\.exe$', ''
+                                if ($shellName) {
+                                    $shells += $shellName.ToLower()
+                                }
+                            }
+                        }
+                    } catch {}
+                }
+                
+                # Check for WSL distributions
+                if (Get-Command wsl -ErrorAction SilentlyContinue) {
+                    try {
+                        $wslDistros = wsl -l -q 2>$null | Where-Object { $_ }
+                        foreach ($distro in $wslDistros) {
+                            $distroName = $distro.Trim()
+                            if ($distroName) {
+                                $shells += "wsl:$distroName"
+                            }
+                        }
+                    } catch {}
+                }
+                
+                $shells | Sort-Object -Unique | ForEach-Object { Write-Output $_ }
+                "#
+            ])
+            .output();
+
+        if let Ok(output) = output {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let shell = line.trim();
+                    if !shell.is_empty() && !shells.contains(&shell.to_string()) {
+                        shells.push(shell.to_string());
+                    }
+                }
+            }
+        }
+        
+        // Fallback: at minimum ensure cmd exists
+        if shells.is_empty() {
+            shells.push("cmd".to_string());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Read /etc/shells to find all registered shells
+        if let Ok(contents) = std::fs::read_to_string("/etc/shells") {
+            for line in contents.lines() {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') {
+                    if let Some(shell_name) = line.split('/').last() {
+                        if std::path::Path::new(line).exists() && !shells.contains(&shell_name.to_string()) {
+                            shells.push(shell_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Read /etc/shells to find all registered shells
+        if let Ok(contents) = std::fs::read_to_string("/etc/shells") {
+            for line in contents.lines() {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') {
+                    if let Some(shell_name) = line.split('/').last() {
+                        if std::path::Path::new(line).exists() && !shells.contains(&shell_name.to_string()) {
+                            shells.push(shell_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    shells
+}
+
 // Tauri command wrappers (private thin layer)
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -31,6 +149,11 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 fn is_speech_available() -> bool {
     is_speech_available_impl()
+}
+
+#[tauri::command]
+fn get_available_shells() -> Vec<String> {
+    get_available_shells_impl()
 }
 
 /// Start listening for speech input
@@ -174,6 +297,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             is_speech_available,
+            get_available_shells,
             start_speech_recognition,
             stop_speech_recognition,
             is_listening,

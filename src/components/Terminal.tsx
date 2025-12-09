@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Terminal as TerminalIcon, Trash2, Plus, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { X, Terminal as TerminalIcon, Trash2, Plus, RotateCcw, ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { wsClient } from '../services/websocket';
@@ -11,6 +11,9 @@ import '@xterm/xterm/css/xterm.css';
 interface TerminalProps {
   isOpen: boolean;
   onClose: () => void;
+  onToggleMaximize?: () => void;
+  isMaximized?: boolean;
+  onOpenSettings?: (tab?: 'connection' | 'terminal' | 'appearance') => void;
 }
 
 interface TerminalSession {
@@ -23,18 +26,22 @@ interface TerminalSession {
   messageHandler?: (msg: ControllerMessage) => void;
 }
 
-export function Terminal({ isOpen, onClose }: TerminalProps) {
+export function Terminal({ isOpen, onClose, onToggleMaximize, isMaximized = false, onOpenSettings }: TerminalProps) {
   const { settings } = useSettings();
   const [sessions, setSessions] = useState<Map<string, TerminalSession>>(new Map());
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [availableShells, setAvailableShells] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionCounterRef = useRef(0);
   const sessionsRef = useRef<Map<string, TerminalSession>>(new Map());
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Create a new terminal session with interactive shell
-  const createSession = useCallback(() => {
+  const createSession = useCallback((shellOverride?: string) => {
     const sessionId = `term-${++sessionCounterRef.current}`;
-    const shellToUse = settings.defaultShell;
+    const shellToUse = shellOverride || settings.defaultShell;
     
     const terminal = new XTerm({
       theme: {
@@ -157,7 +164,30 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
 
     // Spawn interactive shell on the remote with explicit shell type
     logger.log('[Terminal] Spawning terminal with id:', sessionId, 'shell:', shellToUse);
-    wsClient.spawnTerminal(sessionId, undefined, shellToUse, 120, 30);
+    
+    // Ensure we're connected before spawning
+    if (wsClient.isConnected()) {
+      wsClient.spawnTerminal(sessionId, undefined, shellToUse, 120, 30);
+    } else {
+      logger.warn('[Terminal] WebSocket not connected, waiting for connection...');
+      // Wait for connection and retry once
+      const checkConnection = setInterval(() => {
+        if (wsClient.isConnected()) {
+          clearInterval(checkConnection);
+          logger.log('[Terminal] Connection established, spawning terminal');
+          wsClient.spawnTerminal(sessionId, undefined, shellToUse, 120, 30);
+        }
+      }, 100);
+      
+      // Give up after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkConnection);
+        if (!wsClient.isConnected()) {
+          terminal.writeln('\r\n\x1b[31m[Error: Not connected to controller]\x1b[0m');
+          terminal.writeln('\x1b[33mPlease check your connection settings and ensure the controller is running.\x1b[0m');
+        }
+      }, 5000);
+    }
 
     // Mark as connected after a short delay (shell should respond with prompt)
     setTimeout(() => {
@@ -174,6 +204,9 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
 
     return sessionId;
   }, [settings.defaultShell]);
+
+  // Track open state transitions to avoid respawning while closing
+  const wasOpenRef = useRef(false);
 
   // Mount terminal to DOM when container is ready
   useEffect(() => {
@@ -233,12 +266,66 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
     };
   }, [isOpen, activeSessionId, sessions]);
 
-  // Create first session when opened
+  // Request available shells from local system via Tauri
   useEffect(() => {
-    if (isOpen && sessions.size === 0) {
-      createSession();
+    if (!isOpen) return;
+
+    const detectShells = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const shells = await invoke<string[]>('get_available_shells');
+        setAvailableShells(shells);
+      } catch (err) {
+        console.error('Failed to detect shells:', err);
+        // Fallback to platform-appropriate defaults
+        const platform = navigator.platform.toLowerCase();
+        const isWindows = platform.includes('win');
+        const isMac = platform.includes('mac');
+        
+        const defaultShells = isWindows
+          ? ['pwsh', 'powershell', 'cmd']
+          : isMac
+          ? ['zsh', 'bash', 'sh']
+          : ['bash', 'zsh', 'sh'];
+        
+        setAvailableShells(defaultShells);
+      }
+    };
+
+    detectShells();
+  }, [isOpen]);
+
+  // Create first session only when panel transitions to open
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      if (sessions.size === 0) {
+        createSession();
+      }
+      wasOpenRef.current = true;
+    } else if (!isOpen) {
+      wasOpenRef.current = false;
+      setActionsOpen(false);
     }
   }, [isOpen, sessions.size, createSession]);
+
+  // Close actions menu on outside click
+  useEffect(() => {
+    if (!actionsOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (actionsMenuRef.current && actionsButtonRef.current) {
+        const insideMenu = actionsMenuRef.current.contains(target);
+        const insideButton = actionsButtonRef.current.contains(target);
+        if (!insideMenu && !insideButton) {
+          setActionsOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionsOpen]);
 
   // Cleanup sessions on unmount
   useEffect(() => {
@@ -254,6 +341,7 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
         // Dispose local terminal
         session.terminal.dispose();
       });
+      sessionsRef.current = new Map();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on unmount
@@ -276,18 +364,21 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
       wsClient.killTerminal(sessionId);
       // Dispose local terminal
       session.terminal.dispose();
-      
-      setSessions(prev => {
-        const newSessions = new Map(prev);
-        newSessions.delete(sessionId);
-        sessionsRef.current = newSessions;
-        return newSessions;
-      });
+
+      const newSessions = new Map(sessions);
+      newSessions.delete(sessionId);
+      sessionsRef.current = newSessions;
+      setSessions(newSessions);
 
       // Switch to another session if available
       if (activeSessionId === sessionId) {
-        const remaining = Array.from(sessions.keys()).filter(id => id !== sessionId);
-        setActiveSessionId(remaining.length > 0 ? remaining[0] : null);
+        const nextId = newSessions.size > 0 ? Array.from(newSessions.keys())[0] : null;
+        setActiveSessionId(nextId);
+      }
+
+      // If no sessions remain, close the panel to match the expected behavior
+      if (newSessions.size === 0) {
+        onClose();
       }
     }
   };
@@ -297,98 +388,131 @@ export function Terminal({ isOpen, onClose }: TerminalProps) {
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bg-primary border border-border w-[85vw] h-[75vh] max-w-[1100px] flex flex-col shadow-xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-secondary">
-          <div className="flex items-center gap-2">
-            <TerminalIcon size={16} className="text-accent" />
-            <span className="text-sm font-medium text-text-primary">Terminal</span>
-            {activeSession && (
-              <span className={`text-xs px-1.5 py-0.5 ${
-                activeSession.connected 
-                  ? 'text-success bg-success/10' 
-                  : 'text-warning bg-warning/10 animate-pulse'
-              }`}>
-                {activeSession.connected ? 'Connected' : 'Connecting...'}
-              </span>
-            )}
-          </div>
-          
-          {/* Tab bar */}
-          <div className="flex items-center gap-1">
-            {Array.from(sessions.entries()).map(([id, session]) => (
-              <button
-                key={id}
-                onClick={() => setActiveSessionId(id)}
-                className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
-                  id === activeSessionId 
-                    ? 'bg-accent text-white' 
-                    : 'bg-bg-hover text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                <span>{id}</span>
-                {!session.connected && <span className="w-1.5 h-1.5 bg-warning animate-pulse" />}
-                <X
-                  size={12}
-                  className="hover:text-error"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCloseSession(id);
-                  }}
-                />
-              </button>
-            ))}
-            <button
-              onClick={() => createSession()}
-              className="p-1 hover:bg-bg-hover transition-colors"
-              title="New terminal"
-            >
-              <Plus size={14} className="text-text-secondary hover:text-text-primary" />
-            </button>
+    <div className="flex flex-col border-t border-border bg-bg-primary">
+      {/* Header - match the shown design */}
+      <div className="flex items-center justify-between bg-[#2d2d2d] h-10 select-none px-1">
+        <div className="flex items-center h-full">
+          {/* Left label with icon */}
+          <div className="flex items-center gap-2 pl-2 pr-3 text-sm font-semibold text-text-primary">
+            <TerminalIcon size={14} />
+            <span>Terminal</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Terminal tabs */}
+          {Array.from(sessions.entries()).map(([id, session]) => (
             <button
-              onClick={handleClear}
-              className="p-1 hover:bg-bg-hover transition-colors"
-              title="Clear terminal"
+              key={id}
+              onClick={() => setActiveSessionId(id)}
+              className={`relative flex items-center gap-1 pl-4 pr-2 h-full text-sm font-medium transition-colors cursor-pointer border-0 ${
+                id === activeSessionId
+                  ? 'text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
             >
-              <Trash2 size={16} className="text-text-secondary hover:text-text-primary" />
+              <span>{session.shellType || 'pwsh'}</span>
+              {!session.connected && <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />}
+              <X
+                size={14}
+                className="ml-3 opacity-60 hover:opacity-100 hover:text-text-primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCloseSession(id);
+                }}
+                title="Close"
+              />
+              <span
+                className={`absolute left-2 right-2 bottom-0 h-[2px] ${
+                  id === activeSessionId ? 'bg-[#4b8bfa]' : 'bg-transparent'
+                }`}
+                aria-hidden
+              />
             </button>
+          ))}
+
+          {/* Action buttons group */}
+          <div className="flex items-center h-full px-0 gap-0.5 ml-0">
             <button
-              onClick={() => {
-                const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
-                if (activeSession) {
-                  activeSession.fitAddon.fit();
-                  const dims = activeSession.fitAddon.proposeDimensions();
-                  if (dims) {
-                    wsClient.resizeTerminal(activeSession.id, dims.cols, dims.rows);
-                  }
-                }
-              }}
-              className="p-1 hover:bg-bg-hover transition-colors"
-              title="Fit terminal"
+              onClick={() => createSession()}
+              className="p-1 hover:bg-[#383838] transition-colors rounded"
+              title="New Terminal"
             >
-              <RotateCcw size={16} className="text-text-secondary hover:text-text-primary" />
+              <Plus size={16} className="text-text-secondary hover:text-text-primary" />
             </button>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-bg-hover transition-colors"
-              title="Close terminal"
-            >
-              <X size={18} className="text-text-secondary hover:text-text-primary" />
-            </button>
+            <div className="relative">
+              <button
+                ref={actionsButtonRef}
+                onClick={() => setActionsOpen((open) => !open)}
+                className="p-1 hover:bg-[#383838] transition-colors rounded"
+                title="More Actions"
+              >
+                <ChevronDown size={16} className="text-text-secondary hover:text-text-primary" />
+              </button>
+
+              {actionsOpen && (
+                <div
+                  ref={actionsMenuRef}
+                  className="absolute left-0 bottom-full mb-1 z-20 min-w-[200px] border border-[#454545] bg-[#252526] shadow-[0_0_8px_rgba(0,0,0,0.4)]"
+                >
+                {availableShells.length > 0 ? availableShells.map(shell => (
+                  <button
+                    key={shell}
+                    onClick={() => {
+                      setActionsOpen(false);
+                      createSession(shell);
+                    }}
+                    className="flex w-full items-center px-3 py-2 text-sm text-text-primary hover:bg-[#333]"
+                  >
+                    <span>{shell}</span>
+                  </button>
+                )) : (
+                  <div className="px-3 py-2 text-sm text-text-secondary">Loading shells...</div>
+                )}
+                <div className="h-px bg-border" />
+                <button
+                  onClick={() => {
+                    setActionsOpen(false);
+                    onOpenSettings?.('terminal');
+                  }}
+                  className="flex w-full items-center px-3 py-2 text-sm text-text-primary hover:bg-[#333]"
+                >
+                  <span>Settings</span>
+                </button>
+              </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Terminal container */}
-        <div 
-          ref={containerRef}
-          className="flex-1 bg-[#1e1e1e] p-2"
-          style={{ minHeight: 0 }}
-        />
+        {/* Right actions */}
+        <div className="flex items-center gap-1 px-2">
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="p-1.5 hover:bg-[#383838] transition-colors rounded"
+              title={isMaximized ? 'Restore Panel Size' : 'Maximize Panel Size'}
+            >
+              {isMaximized
+                ? <ChevronDown size={16} className="text-text-secondary hover:text-text-primary" />
+                : <ChevronUp size={16} className="text-text-secondary hover:text-text-primary" />
+              }
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-[#383838] transition-colors rounded"
+            title="Close Panel"
+          >
+            <X size={16} className="text-text-secondary hover:text-text-primary" />
+          </button>
+        </div>
       </div>
+
+      {/* Terminal container */}
+      <div 
+        ref={containerRef}
+        className="flex-1 bg-[#1e1e1e] overflow-hidden"
+        style={{ minHeight: 0 }}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSettings } from './hooks/useSettings';
 import { useSystemOptimization } from './hooks/useSystemOptimization';
@@ -35,7 +36,7 @@ import { StatusBar } from './components/StatusBar';
 import { ChatView } from './components/ChatView';
 import { SettingsDialog } from './components/SettingsDialog';
 import { AboutDialog } from './components/AboutDialog';
-import { FileBrowser } from './components/FileBrowser';
+import { WorkspaceExplorer } from './components/WorkspaceExplorer';
 import { FileEditor } from './components/FileEditor';
 import { Terminal } from './components/Terminal';
 import { FavoritesSidebar } from './components/FavoritesSidebar';
@@ -44,7 +45,8 @@ import { SessionManagementDialog } from './components/SessionManagementDialog';
 import { BranchManager } from './components/BranchManager';
 import { ChangeApprovalDialog } from './components/ChangeApprovalDialog';
 import { ErrorNotification, ErrorDetails } from './components/ErrorNotification';
-import { type ModelInfo, type ModeInfo, type ChatMode } from './types';
+import { type ModelInfo, type ModeInfo, type ChatMode, type ContextFile } from './types';
+import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
 // Available modes
@@ -62,9 +64,12 @@ function App() {
   const isOnline = useNetworkStatus();
   useWindowState(); // Persist window size/position
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'connection' | 'terminal' | 'appearance'>('connection');
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+  const [explorerWidth, setExplorerWidth] = useState(220);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(200);
+  const [terminalMaximized, setTerminalMaximized] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
@@ -81,14 +86,18 @@ function App() {
   const [selectedMode, setSelectedMode] = useState<ChatMode>('agent');
   const [includeContext, setIncludeContext] = useState<boolean>(true);  // Include VS Code context by default
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
+  const [contextFiles, setContextFiles] = useState<ContextFile[]>([]);
   const [latency, setLatency] = useState<number>(0);
   const [connectionQuality, setConnectionQuality] = useState<'good' | 'fair' | 'poor' | 'unknown'>('unknown');
+  const [streamingStatus, setStreamingStatus] = useState<string>('');
   const [editorState, setEditorState] = useState<{
     isOpen: boolean;
     filePath: string;
     content: string;
     language?: string;
   }>({ isOpen: false, filePath: '', content: '' });
+  const [openTabs, setOpenTabs] = useState<{ path: string; name: string; isPreview: boolean; content: string; language?: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
 
   const handleModelsReceived = useCallback((models: ModelInfo[]) => {
     logger.log('Models received in App:', models);
@@ -241,11 +250,6 @@ function App() {
         e.preventDefault();
         window.open('https://github.com/Yuxi-Labs/vscode-github-copilot-controller', '_blank');
       }
-      // Ctrl+B: Toggle File Browser
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault();
-        setFileBrowserOpen(!fileBrowserOpen);
-      }
       // Ctrl+`: Toggle Terminal
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault();
@@ -269,8 +273,6 @@ function App() {
           setSettingsOpen(false);
         } else if (aboutOpen) {
           setAboutOpen(false);
-        } else if (fileBrowserOpen) {
-          setFileBrowserOpen(false);
         } else if (terminalOpen) {
           setTerminalOpen(false);
         } else if (favoritesOpen) {
@@ -287,7 +289,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentStreamingId, cancelMessage, clearMessages, settingsOpen, aboutOpen, fileBrowserOpen, terminalOpen, favoritesOpen, sessionsOpen, handleExportChat]);
+  }, [currentStreamingId, cancelMessage, clearMessages, settingsOpen, aboutOpen, terminalOpen, favoritesOpen, sessionsOpen, handleExportChat]);
 
   // Send battery and bandwidth optimization to controller
   useEffect(() => {
@@ -448,6 +450,38 @@ function App() {
     setSelectedMode(mode);
   }, []);
 
+  // Context file handlers
+  const handleToggleContextFile = useCallback((id: string) => {
+    setContextFiles(prev => prev.map(f => 
+      f.id === id ? { ...f, enabled: !f.enabled } : f
+    ));
+  }, []);
+
+  const handleRemoveContextFile = useCallback((id: string) => {
+    setContextFiles(prev => prev.filter(f => f.id !== id));
+  }, []);
+
+  const handleAttachManual = useCallback(() => {
+    // TODO: Open file picker dialog
+    logger.log('Manual file attach requested');
+  }, []);
+
+  const handleAttachFileToContext = useCallback((file: { name: string; content: string }) => {
+    // Add file to context if not already present
+    const exists = contextFiles.some(f => f.name === file.name);
+    if (!exists) {
+      const newContextFile: ContextFile = {
+        id: uuidv4(),
+        name: file.name,
+        path: file.name, // TODO: Get actual path if available
+        content: file.content,
+        enabled: true,
+        isAuto: false,
+      };
+      setContextFiles(prev => [...prev, newContextFile]);
+    }
+  }, [contextFiles]);
+
   const handleRetry = useCallback((_messageId: string, content: string) => {
     // Resend the message with context from the original message
     sendMessage(content, selectedModel, includeContext, selectedMode);
@@ -507,42 +541,225 @@ function App() {
         onConnect={handleConnect}
         onDisconnect={disconnect}
         onOpenTerminal={() => setTerminalOpen(true)}
+        onOpenBranchManager={() => setBranchManagerOpen(true)}
+        onOpenPendingChanges={() => setChangeApprovalOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onNewChat={handleNewChat}
+        onToggleSidebar={() => setFavoritesOpen(!favoritesOpen)}
+        sidebarOpen={favoritesOpen}
+        pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
+          count + group.changes.filter(c => c.status === 'pending').length, 0)}
+        hasMessages={messages.length > 0}
       />
 
-      {/* Chat View */}
-      <ChatView
-        messages={branchTree?.branches ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
-        onSendMessage={(content, file) => {
-          // Build the message content with optional attached file
-          let messageContent = content;
-          if (file) {
-            messageContent = `\`\`\`${file.name}\n${file.content}\n\`\`\`\n\n${content}`;
-          }
-          sendMessage(messageContent, selectedModel, includeContext, selectedMode);
-          // Clear the attached file after sending
-          setAttachedFile(null);
-        }}
-        onCancelMessage={handleCancelMessage}
-        onNewChat={handleNewChat}
-        onBranch={handleCreateBranch}
-        isConnected={isConnected}
-        isStreaming={isStreaming}
-        models={availableModels}
-        selectedModel={selectedModel}
-        onModelChange={handleModelChange}
-        modes={AVAILABLE_MODES}
-        selectedMode={selectedMode}
-        onModeChange={handleModeChange}
-        includeContext={includeContext}
-        onIncludeContextChange={setIncludeContext}
-        onOpenFileBrowser={() => setFileBrowserOpen(true)}
-        onOpenTerminal={() => setTerminalOpen(true)}
-        attachedFile={attachedFile}
-        onAttachFile={setAttachedFile}
-        onRemoveAttachedFile={() => setAttachedFile(null)}
-        onRetry={handleRetry}
-        onRegenerate={handleRegenerate}
-      />
+      {/* Main Content Area - Three Column Layout */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Left: Workspace Explorer - Full height */}
+        <div className="shrink-0 flex flex-col" style={{ width: explorerWidth }}>
+          <WorkspaceExplorer
+            isConnected={isConnected}
+            onAttachFile={(file) => {
+              // Explicitly attach file to chat context (called from context menu)
+              const exists = contextFiles.some(f => f.name === file.name);
+              if (!exists) {
+                const newContextFile: ContextFile = {
+                  id: uuidv4(),
+                  name: file.name,
+                  path: file.name,
+                  content: file.content,
+                  enabled: true,
+                  isAuto: false, // Explicitly attached from context menu
+                };
+                setContextFiles(prev => [...prev, newContextFile]);
+              }
+            }}
+            onEditFile={(path, content, language, isPreview = true) => {
+              // Manage tabs
+              const fileName = path.split('/').pop() || path;
+              setOpenTabs(prev => {
+                const withoutPreview = isPreview ? prev.filter(tab => !tab.isPreview) : prev;
+                const existingIndex = withoutPreview.findIndex(tab => tab.path === path);
+                if (existingIndex >= 0) {
+                  if (!isPreview && withoutPreview[existingIndex].isPreview) {
+                    withoutPreview[existingIndex] = { ...withoutPreview[existingIndex], isPreview: false };
+                  }
+                  return withoutPreview;
+                }
+                return [...withoutPreview, { path, name: fileName, isPreview, content, language }];
+              });
+              setActiveTab(path);
+              setEditorState({
+                isOpen: true,
+                filePath: path,
+                content,
+                language,
+              });
+            }}
+          />
+        </div>
+
+        {/* Center: Editor area + Terminal (stacked) */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Editor/content area */}
+          <div className={`bg-bg-primary flex-1 min-h-0 flex flex-col ${terminalOpen && !terminalMaximized ? '' : ''}`} style={terminalOpen && !terminalMaximized ? { flex: `1 1 calc(100% - ${terminalHeight}px)` } : undefined}>
+            {/* Tabs Row */}
+            {openTabs.length > 0 && (
+              <div className="flex items-center overflow-x-auto border-b border-border bg-bg-secondary">
+                {openTabs.map(tab => (
+                  <div
+                    key={tab.path}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-border cursor-pointer hover:bg-bg-hover ${
+                      activeTab === tab.path ? 'bg-bg-primary text-text-primary' : 'text-text-secondary'
+                    }`}
+                    onClick={() => {
+                      setActiveTab(tab.path);
+                      setEditorState({
+                        isOpen: true,
+                        filePath: tab.path,
+                        content: tab.content,
+                        language: tab.language,
+                      });
+                    }}
+                  >
+                    <span className={tab.isPreview ? 'italic' : ''}>{tab.name}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenTabs(prev => {
+                          const filtered = prev.filter(t => t.path !== tab.path);
+                          if (activeTab === tab.path && filtered.length > 0) {
+                            const newActive = filtered[filtered.length - 1];
+                            setActiveTab(newActive.path);
+                            setEditorState({
+                              isOpen: true,
+                              filePath: newActive.path,
+                              content: newActive.content,
+                              language: newActive.language,
+                            });
+                          } else if (filtered.length === 0) {
+                            setActiveTab(null);
+                            setEditorState({ isOpen: false, filePath: '', content: '' });
+                          }
+                          return filtered;
+                        });
+                      }}
+                      className="hover:bg-bg-tertiary rounded p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Editor or Welcome */}
+            {editorState.isOpen ? (
+              <FileEditor
+                isOpen={true}
+                filePath={editorState.filePath}
+                initialContent={editorState.content}
+                language={editorState.language}
+                onClose={() => {
+                  setOpenTabs(prev => prev.filter(t => t.path !== editorState.filePath));
+                  setEditorState({ isOpen: false, filePath: '', content: '' });
+                  setActiveTab(null);
+                }}
+                onSaved={() => {
+                  // File saved via Copilot
+                }}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-text-secondary text-sm">
+                <div className="text-center">
+                  <p className="mb-2">Select a file to open in editor</p>
+                  <p className="text-xs text-text-secondary/60">Click files in Explorer to edit</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Terminal Panel */}
+          {terminalOpen && (
+            <div 
+              className="shrink-0" 
+              style={{ height: terminalMaximized ? '100%' : terminalHeight }}
+            >
+              <Terminal
+                isOpen={terminalOpen}
+                onClose={() => setTerminalOpen(false)}
+                onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
+                isMaximized={terminalMaximized}
+                onOpenSettings={(tab) => {
+                  setSettingsInitialTab(tab || 'terminal');
+                  setSettingsOpen(true);
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right: Chat Sidebar - Full height */}
+        <div className="shrink-0 flex flex-col border-l border-border" style={{ width: 420 }}>
+          <ChatView
+            messages={branchTree?.branches ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
+            onSendMessage={(content) => {
+              // Build message content with open tabs as context
+              let messageContent = content;
+              // Use open tabs as context (+ any manually attached files)
+              const tabContextFiles = openTabs.map(tab => ({
+                id: tab.path,
+                name: tab.name,
+                path: tab.path,
+                content: tab.content,
+                enabled: true,
+                isAuto: true,
+              }));
+              const allContextFiles = [...tabContextFiles, ...contextFiles.filter(f => !tabContextFiles.some(t => t.path === f.path))];
+              const enabledFiles = allContextFiles.filter(f => f.enabled);
+              if (enabledFiles.length > 0) {
+                const contextSection = enabledFiles.map(f => 
+                  `\`\`\`${f.name}\n${f.content}\n\`\`\``
+                ).join('\n\n');
+                messageContent = `${contextSection}\n\n${content}`;
+              }
+              setStreamingStatus('Sending to Copilot...');
+              sendMessage(messageContent, selectedModel, includeContext, selectedMode);
+            }}
+            onCancelMessage={handleCancelMessage}
+            onNewChat={handleNewChat}
+            onBranch={handleCreateBranch}
+            isConnected={isConnected}
+            isStreaming={isStreaming}
+            streamingStatus={streamingStatus}
+            models={availableModels}
+            selectedModel={selectedModel}
+            onModelChange={handleModelChange}
+            modes={AVAILABLE_MODES}
+            selectedMode={selectedMode}
+            onModeChange={handleModeChange}
+            includeContext={includeContext}
+            onIncludeContextChange={setIncludeContext}
+            onRetry={handleRetry}
+            onRegenerate={handleRegenerate}
+            contextFiles={[
+              // Show open tabs as context files in chat
+              ...openTabs.map(tab => ({
+                id: tab.path,
+                name: tab.name,
+                path: tab.path,
+                content: tab.content,
+                enabled: true,
+                isAuto: true,
+              })),
+              // Plus any manually attached files
+              ...contextFiles.filter(f => !openTabs.some(t => t.path === f.path)),
+            ]}
+            onToggleContextFile={handleToggleContextFile}
+            onRemoveContextFile={handleRemoveContextFile}
+            onAttachManual={handleAttachManual}
+          />
+        </div>
+      </div>
 
       {/* Status Bar */}
       {settings.showStatusBar && (
@@ -552,12 +769,19 @@ function App() {
           messageCount={messages.length}
           latency={latency}
           connectionQuality={connectionQuality}
-          batteryLevel={systemStatus.batteryLevel}
-          isCharging={systemStatus.isCharging}
           bandwidthMode={bandwidthMode}
           isOnline={isOnline}
           reconnectAttempts={wsClient.getReconnectAttempts()}
           onManualReconnect={() => wsClient.manualReconnect()}
+          selectedMode={selectedMode}
+          selectedModel={availableModels.find(m => m.id === selectedModel)?.name}
+          pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
+            count + group.changes.filter(c => c.status === 'pending').length, 0)}
+          onOpenPendingChanges={() => setChangeApprovalOpen(true)}
+          activeBranch={branchTree?.branches?.get(branchTree.activeBranchId)?.name}
+          onOpenBranchManager={() => setBranchManagerOpen(true)}
+          isStreaming={isStreaming}
+          streamingStatus={streamingStatus}
         />
       )}
 
@@ -568,6 +792,7 @@ function App() {
         settings={settings}
         onSave={updateSettings}
         onReset={resetSettings}
+        initialTab={settingsInitialTab}
       />
 
       {/* About Dialog */}
@@ -602,45 +827,6 @@ function App() {
         onApproveAll={handleApproveAllChanges}
         onRejectAll={handleRejectAllChanges}
         onClose={() => setChangeApprovalOpen(false)}
-      />
-
-      {/* File Browser */}
-      <FileBrowser
-        isOpen={fileBrowserOpen}
-        onClose={() => setFileBrowserOpen(false)}
-        onFileSelect={(path, content) => {
-          // Extract just the filename from the path
-          const fileName = path.split('/').pop() || path.split('\\').pop() || path;
-          setAttachedFile({ name: fileName, content });
-          setFileBrowserOpen(false);
-        }}
-        onEditFile={(path, content, language) => {
-          setEditorState({
-            isOpen: true,
-            filePath: path,
-            content,
-            language,
-          });
-          setFileBrowserOpen(false);
-        }}
-      />
-
-      {/* File Editor */}
-      <FileEditor
-        isOpen={editorState.isOpen}
-        onClose={() => setEditorState(prev => ({ ...prev, isOpen: false }))}
-        filePath={editorState.filePath}
-        initialContent={editorState.content}
-        language={editorState.language}
-        onSaved={() => {
-          // Optionally refresh or show notification
-        }}
-      />
-
-      {/* Terminal */}
-      <Terminal
-        isOpen={terminalOpen}
-        onClose={() => setTerminalOpen(false)}
       />
 
       {/* Favorites Sidebar */}
