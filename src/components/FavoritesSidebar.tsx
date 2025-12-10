@@ -1,6 +1,7 @@
 import { Star, Clock, Trash2, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getFavorites, getRecent, toggleFavorite, deleteConnection, type ConnectionFavorite } from '../utils/connectionFavorites';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface FavoritesSidebarProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface FavoritesSidebarProps {
 export function FavoritesSidebar({ isOpen, onClose, onSelectConnection }: FavoritesSidebarProps) {
   const [favorites, setFavorites] = useState<ConnectionFavorite[]>([]);
   const [recent, setRecent] = useState<ConnectionFavorite[]>([]);
+  const { showContextMenu } = useContextMenu();
 
   useEffect(() => {
     if (isOpen) {
@@ -18,6 +20,45 @@ export function FavoritesSidebar({ isOpen, onClose, onSelectConnection }: Favori
       setRecent(getRecent());
     }
   }, [isOpen]);
+
+  const handleConnectionContextMenu = useCallback((e: React.MouseEvent, conn: ConnectionFavorite) => {
+    e.preventDefault();
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Connect',
+        shortcut: 'Enter',
+        action: () => onSelectConnection(conn.url, conn.token),
+      },
+      { divider: true },
+      {
+        label: 'Copy URL',
+        action: () => navigator.clipboard.writeText(conn.url),
+      },
+      {
+        label: 'Copy Token',
+        action: () => navigator.clipboard.writeText(conn.token),
+      },
+      { divider: true },
+      {
+        label: conn.isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+        action: () => {
+          toggleFavorite(conn.id);
+          setFavorites(getFavorites());
+          setRecent(getRecent());
+        },
+      },
+      { divider: true },
+      {
+        label: 'Delete Connection',
+        action: () => {
+          deleteConnection(conn.id);
+          setFavorites(getFavorites());
+          setRecent(getRecent());
+        },
+      },
+    ];
+    showContextMenu(e, items);
+  }, [onSelectConnection, showContextMenu]);
 
   if (!isOpen) return null;
 
@@ -50,6 +91,8 @@ export function FavoritesSidebar({ isOpen, onClose, onSelectConnection }: Favori
     <div
       key={`${conn.url}-${conn.token}`}
       className="flex items-center gap-2 p-2 hover:bg-bg-tertiary group"
+      onContextMenu={(e) => handleConnectionContextMenu(e, conn)}
+      data-context-menu
     >
       <button
         onClick={() => onSelectConnection(conn.url, conn.token)}

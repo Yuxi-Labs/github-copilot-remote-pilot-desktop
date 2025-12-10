@@ -272,6 +272,8 @@ export function MessageInput({
               value={isListening && interimTranscript ? interimTranscript : message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
+              onContextMenu={handleTextareaContextMenu}
+              data-context-menu
               placeholder={
                 disabled 
                   ? 'Connect to start chatting...' 
