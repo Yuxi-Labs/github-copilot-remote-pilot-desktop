@@ -1,11 +1,12 @@
 import { User, Bot, Copy, Check, RefreshCw, AlertCircle, RotateCcw, GitBranch } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message as MessageType } from '../types';
 import { ToolCallCard } from './ToolCallCard';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface MessageProps {
   message: MessageType;
@@ -17,6 +18,7 @@ interface MessageProps {
 
 export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch }: MessageProps) {
   const [copied, setCopied] = useState(false);
+  const { showContextMenu } = useContextMenu();
   const isUser = message.role === 'user';
   const time = new Date(message.timestamp).toLocaleTimeString([], {
     hour: '2-digit',
@@ -33,8 +35,63 @@ export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch
     }
   };
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const hasSelection = window.getSelection()?.toString().trim();
+    const items: ContextMenuItem[] = [];
+
+    // Copy selection (if any)
+    if (hasSelection) {
+      items.push({
+        label: 'Copy Selection',
+        shortcut: 'Ctrl+C',
+        action: () => document.execCommand('copy'),
+      });
+      items.push({ divider: true });
+    }
+
+    // Copy message
+    items.push({
+      label: 'Copy Message',
+      action: handleCopy,
+    });
+
+    // Regenerate (for assistant messages)
+    if (!isUser && onRegenerate && !message.hasError) {
+      items.push({
+        label: 'Regenerate Response',
+        action: () => onRegenerate(message.id),
+      });
+    }
+
+    // Retry (for failed messages)
+    if (message.hasError && onRetry) {
+      items.push({
+        label: 'Retry',
+        action: () => onRetry(message.id, message.content),
+      });
+    }
+
+    // Branch
+    if (onBranch && messageIndex !== undefined) {
+      items.push({ divider: true });
+      items.push({
+        label: 'Create Branch',
+        action: () => onBranch(messageIndex),
+      });
+    }
+
+    showContextMenu(e, items);
+  }, [message, messageIndex, isUser, onRetry, onRegenerate, onBranch, handleCopy, showContextMenu]);
+
   return (
-    <div className={`flex gap-3 p-4 ${isUser ? 'bg-bg-secondary' : 'bg-bg-primary'}`}>
+    <div 
+      className={`flex gap-3 p-4 ${isUser ? 'bg-bg-secondary' : 'bg-bg-primary'}`}
+      onContextMenu={handleContextMenu}
+      data-context-menu
+    >
       {/* Avatar */}
       <div
         className={`flex-shrink-0 w-8 h-8 flex items-center justify-center ${

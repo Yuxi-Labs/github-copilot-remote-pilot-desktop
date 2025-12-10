@@ -233,30 +233,126 @@ export interface OpenFileRequest {
 
 // App settings
 export interface Settings {
+  // Connection
   connectionUrl: string;
   authToken: string;
   autoReconnect: boolean;
   reconnectInterval: number;
+  maxReconnectAttempts: number;
+  connectionTimeout: number;
+  
+  // Chat
+  model?: string;
+  defaultMode: ChatMode;
+  includeContextByDefault: boolean;
+  sendOnEnter: boolean;
+  showStreamingIndicator: boolean;
+  enableMarkdownRendering: boolean;
+  maxHistorySize: number;
+  autoSaveHistory: boolean;
+  
+  // Terminal
+  defaultShell: string;
+  terminalFontSize: number;
+  terminalFontFamily: string;
+  terminalCursorBlink: boolean;
+  terminalCursorStyle: 'block' | 'underline' | 'bar';
+  terminalScrollback: number;
+  copyOnSelect: boolean;
+  
+  // Editor
+  editorFontSize: number;
+  editorFontFamily: string;
+  editorTabSize: number;
+  editorLineNumbers: boolean;
+  editorWordWrap: boolean;
+  
+  // Appearance
   theme: 'light' | 'dark' | 'system';
   fontSize: number;
+  enableAnimations: boolean;
+  compactMode: boolean;
+  
+  // Layout
   showToolbar: boolean;
   showStatusBar: boolean;
-  defaultShell: string;
-  model?: string;
+  rememberWindowState: boolean;
+  defaultExplorerWidth: number;
+  defaultTerminalHeight: number;
+  defaultChatWidth: number;
+  confirmOnExit: boolean;
+  
+  // System
+  batteryOptimization: boolean;
+  bandwidthOptimization: boolean;
+  lowBatteryThreshold: number;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  
+  // Privacy
+  clearHistoryOnExit: boolean;
+  exportFormat: 'markdown' | 'json' | 'text';
 }
 
 // Default settings
 export const DEFAULT_SETTINGS: Settings = {
+  // Connection
   connectionUrl: 'ws://localhost:3712/ws',
   authToken: '',
   autoReconnect: true,
   reconnectInterval: 5000,
+  maxReconnectAttempts: 10,
+  connectionTimeout: 10000,
+  
+  // Chat
+  model: '',
+  defaultMode: 'agent',
+  includeContextByDefault: true,
+  sendOnEnter: true,
+  showStreamingIndicator: true,
+  enableMarkdownRendering: true,
+  maxHistorySize: 1000,
+  autoSaveHistory: true,
+  
+  // Terminal
+  defaultShell: 'pwsh',
+  terminalFontSize: 14,
+  terminalFontFamily: 'Menlo, Monaco, "Courier New", monospace',
+  terminalCursorBlink: true,
+  terminalCursorStyle: 'block',
+  terminalScrollback: 10000,
+  copyOnSelect: false,
+  
+  // Editor
+  editorFontSize: 15,
+  editorFontFamily: 'Consolas, Monaco, monospace',
+  editorTabSize: 2,
+  editorLineNumbers: true,
+  editorWordWrap: false,
+  
+  // Appearance
   theme: 'system',
   fontSize: 14,
+  enableAnimations: true,
+  compactMode: false,
+  
+  // Layout
   showToolbar: true,
   showStatusBar: true,
-  defaultShell: 'pwsh',
-  model: '',
+  rememberWindowState: true,
+  defaultExplorerWidth: 220,
+  defaultTerminalHeight: 200,
+  defaultChatWidth: 420,
+  confirmOnExit: false,
+  
+  // System
+  batteryOptimization: true,
+  bandwidthOptimization: true,
+  lowBatteryThreshold: 20,
+  logLevel: 'info',
+  
+  // Privacy
+  clearHistoryOnExit: false,
+  exportFormat: 'markdown',
 };
 
 // App state

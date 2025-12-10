@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Folder, FolderOpen, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, FileText, FileCode, FileJson, Image, Settings, GitBranch, Monitor, FilePlus, FolderPlus, Trash2, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { Folder, FolderOpen, File, ChevronRight, ChevronDown, RefreshCw, ExternalLink, FileText, FileCode, FileJson, Image, Settings, GitBranch, Monitor, FilePlus, FolderPlus, Trash2, ChevronsDown, ChevronsUp, Clipboard, Plus } from 'lucide-react';
 import { wsClient } from '../services/websocket';
 import { FileEntry, ControllerMessage } from '../types';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface WorkspaceExplorerProps {
   isConnected: boolean;
@@ -55,6 +56,7 @@ export function WorkspaceExplorer({
   onEditFile,
   onAttachFile 
 }: WorkspaceExplorerProps) {
+  const { showContextMenu } = useContextMenu();
   const [state, setState] = useState<ExplorerState>({
     entries: [],
     workspaceName: '',
@@ -66,7 +68,6 @@ export function WorkspaceExplorer({
   });
 
   const [dirContents, setDirContents] = useState<Map<string, FileEntry[]>>(new Map());
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
 
   const loadDirectory = useCallback((path: string = '') => {
     if (!wsClient.isConnected()) return;
@@ -163,14 +164,62 @@ export function WorkspaceExplorer({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, entry: FileEntry) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, entry });
-  };
+    e.stopPropagation();
+
+    const items: ContextMenuItem[] = [];
+
+    if (entry.type === 'file') {
+      items.push({
+        label: 'Open',
+        action: () => handleFileClick(entry, true),
+      });
+      items.push({
+        label: 'Attach to Chat',
+        action: () => handleAttachToContext(entry),
+      });
+      items.push({
+        label: 'Open in VS Code',
+        action: () => handleOpenInVSCode(entry.path),
+      });
+      items.push({ divider: true });
+      items.push({
+        label: 'Copy Path',
+        action: async () => {
+          await navigator.clipboard.writeText(entry.path);
+        },
+      });
+    } else {
+      items.push({
+        label: state.expandedDirs.has(entry.path) ? 'Collapse' : 'Expand',
+        action: () => toggleDirectory(entry.path),
+      });
+      items.push({ divider: true });
+      items.push({
+        label: 'New File...',
+        disabled: true, // TODO: Implement
+        action: () => {},
+      });
+      items.push({
+        label: 'New Folder...',
+        disabled: true, // TODO: Implement
+        action: () => {},
+      });
+      items.push({ divider: true });
+      items.push({
+        label: 'Copy Path',
+        action: async () => {
+          await navigator.clipboard.writeText(entry.path);
+        },
+      });
+    }
+
+    showContextMenu(e, items);
+  }, [state.expandedDirs, showContextMenu]);
 
   const handleOpenInVSCode = (path: string) => {
     wsClient.openFile(path);
-    setContextMenu(null);
   };
 
   const handleAttachToContext = (entry: FileEntry) => {
@@ -191,17 +240,7 @@ export function WorkspaceExplorer({
     };
     
     wsClient.addMessageHandler(handleMessage);
-    setContextMenu(null);
   };
-
-  // Close context menu on click outside
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
-    }
-  }, [contextMenu]);
 
   const renderEntry = (entry: FileEntry, depth: number = 0) => {
     const isExpanded = state.expandedDirs.has(entry.path);
@@ -216,6 +255,7 @@ export function WorkspaceExplorer({
           onDoubleClick={() => handleFileClick(entry, true)}
           onContextMenu={(e) => handleContextMenu(e, entry)}
           title={entry.path}
+          data-context-menu
         >
           {entry.type === 'directory' ? (
             <>
@@ -270,7 +310,7 @@ export function WorkspaceExplorer({
   return (
     <div className="h-full flex flex-col bg-bg-secondary border-r border-border">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 border-b border-border flex items-center" style={{ height: '32px' }}>
         <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
           Explorer
         </h3>
@@ -279,7 +319,7 @@ export function WorkspaceExplorer({
       {/* Toolbar and Tabs */}
       <div className="border-b border-border">
         {/* Toolbar */}
-        <div className="px-2 py-1.5 flex items-center gap-0.5">
+        <div className="px-2 flex items-center gap-0.5" style={{ height: '32px' }}>
         <button
           onClick={() => {/* TODO: Create file */}}
           className="p-1 hover:bg-bg-hover rounded transition-colors"
@@ -362,48 +402,9 @@ export function WorkspaceExplorer({
       {/* Hint */}
       <div className="px-3 py-1.5 border-t border-border bg-bg-tertiary">
         <p className="text-[10px] text-text-secondary">
-          Click to open • Right-click to attach to chat
+          Click to open • Right-click for options
         </p>
       </div>
-
-      {/* Context Menu */}
-      {contextMenu && (
-        <div 
-          className="fixed bg-bg-primary border border-border shadow-lg py-1 z-50 min-w-[160px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          {contextMenu.entry.type === 'file' && (
-            <>
-              <button
-                className="w-full px-3 py-1.5 text-left text-xs hover:bg-bg-hover flex items-center gap-2"
-                onClick={() => handleAttachToContext(contextMenu.entry)}
-              >
-                <FileText size={12} />
-                Attach to Chat
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left text-xs hover:bg-bg-hover flex items-center gap-2"
-                onClick={() => handleOpenInVSCode(contextMenu.entry.path)}
-              >
-                <ExternalLink size={12} />
-                Open in VS Code
-              </button>
-            </>
-          )}
-          {contextMenu.entry.type === 'directory' && (
-            <button
-              className="w-full px-3 py-1.5 text-left text-xs hover:bg-bg-hover flex items-center gap-2"
-              onClick={() => {
-                toggleDirectory(contextMenu.entry.path);
-                setContextMenu(null);
-              }}
-            >
-              <FolderOpen size={12} />
-              {state.expandedDirs.has(contextMenu.entry.path) ? 'Collapse' : 'Expand'}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

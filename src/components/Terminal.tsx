@@ -5,6 +5,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { wsClient } from '../services/websocket';
 import { ControllerMessage } from '../types';
 import { useSettings } from '../hooks/useSettings';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 import { logger } from '../utils/logger';
 import '@xterm/xterm/css/xterm.css';
 
@@ -28,6 +29,7 @@ interface TerminalSession {
 
 export function Terminal({ isOpen, onClose, onToggleMaximize, isMaximized = false, onOpenSettings }: TerminalProps) {
   const { settings } = useSettings();
+  const { showContextMenu } = useContextMenu();
   const [sessions, setSessions] = useState<Map<string, TerminalSession>>(new Map());
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -346,6 +348,14 @@ export function Terminal({ isOpen, onClose, onToggleMaximize, isMaximized = fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on unmount
 
+  // Create initial session when terminal is first opened
+  useEffect(() => {
+    if (isOpen && sessions.size === 0 && wsClient.isConnected()) {
+      logger.log('[Terminal] Creating initial session');
+      createSession();
+    }
+  }, [isOpen, sessions.size, createSession]);
+
   const handleClear = () => {
     const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
     if (activeSession) {
@@ -510,8 +520,59 @@ export function Terminal({ isOpen, onClose, onToggleMaximize, isMaximized = fals
       {/* Terminal container */}
       <div 
         ref={containerRef}
-        className="flex-1 bg-[#1e1e1e] overflow-hidden"
+        className="flex-1 bg-[#1e1e1e] overflow-hidden pl-2 pt-2"
         style={{ minHeight: 0 }}
+        data-context-menu
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const terminal = activeSession?.terminal;
+          const hasSelection = terminal?.hasSelection();
+          
+          const items: ContextMenuItem[] = [];
+          
+          if (hasSelection) {
+            items.push({
+              label: 'Copy',
+              shortcut: 'Ctrl+C',
+              action: () => {
+                const selection = terminal?.getSelection();
+                if (selection) {
+                  navigator.clipboard.writeText(selection);
+                }
+              },
+            });
+          }
+          
+          items.push({
+            label: 'Paste',
+            shortcut: 'Ctrl+V',
+            action: async () => {
+              const text = await navigator.clipboard.readText();
+              if (text && activeSessionId) {
+                wsClient.sendTerminalInput(activeSessionId, text);
+              }
+            },
+          });
+          
+          if (hasSelection) {
+            items.push({ divider: true });
+            items.push({
+              label: 'Select All',
+              shortcut: 'Ctrl+A',
+              action: () => terminal?.selectAll(),
+            });
+          }
+          
+          items.push({ divider: true });
+          items.push({
+            label: 'Clear',
+            action: () => terminal?.clear(),
+          });
+          
+          showContextMenu(e, items);
+        }}
       />
     </div>
   );

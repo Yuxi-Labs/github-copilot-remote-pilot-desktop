@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SettingsDialog } from '../../components/SettingsDialog';
+import { SettingsEditor } from '../../components/SettingsDialog';
 
-describe('SettingsDialog', () => {
+describe('SettingsEditor', () => {
   const defaultSettings = {
     connectionUrl: 'ws://localhost:3712/ws',
     authToken: 'test-token',
@@ -13,44 +13,62 @@ describe('SettingsDialog', () => {
     showToolbar: true,
     showStatusBar: true,
     defaultShell: 'pwsh',
-    model: 'gpt-4'
+    model: 'gpt-4',
+    maxReconnectAttempts: 10,
+    connectionTimeout: 10000,
+    defaultMode: 'agent' as const,
+    includeContextByDefault: true,
+    sendOnEnter: true,
+    showStreamingIndicator: true,
+    enableMarkdownRendering: true,
+    maxHistorySize: 1000,
+    autoSaveHistory: true,
+    terminalFontSize: 14,
+    terminalFontFamily: 'monospace',
+    terminalCursorBlink: true,
+    terminalCursorStyle: 'block' as const,
+    terminalScrollback: 10000,
+    copyOnSelect: false,
+    editorFontSize: 15,
+    editorFontFamily: 'monospace',
+    editorTabSize: 2,
+    editorLineNumbers: true,
+    editorWordWrap: false,
+    enableAnimations: true,
+    compactMode: false,
+    rememberWindowState: true,
+    defaultExplorerWidth: 220,
+    defaultTerminalHeight: 200,
+    defaultChatWidth: 420,
+    confirmOnExit: false,
+    batteryOptimization: true,
+    bandwidthOptimization: true,
+    lowBatteryThreshold: 20,
+    logLevel: 'info' as const,
+    clearHistoryOnExit: false,
+    exportFormat: 'markdown' as const,
   };
 
-  it('should not render when closed', () => {
+  it('should render settings editor', () => {
     render(
-      <SettingsDialog
-        isOpen={false}
+      <SettingsEditor
         settings={defaultSettings}
         onSave={vi.fn()}
-        onClose={vi.fn()}
         onReset={vi.fn()}
       />
     );
 
-    expect(screen.queryByText(/settings/i)).not.toBeInTheDocument();
-  });
-
-  it('should render when open', () => {
-    render(
-      <SettingsDialog
-        isOpen={true}
-        settings={defaultSettings}
-        onSave={vi.fn()}
-        onClose={vi.fn()}
-        onReset={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText(/settings/i)).toBeInTheDocument();
+    // Check that sidebar categories are visible
+    expect(screen.getByText('Connection')).toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
+    expect(screen.getByText('Terminal')).toBeInTheDocument();
   });
 
   it('should display current settings', () => {
     render(
-      <SettingsDialog
-        isOpen={true}
+      <SettingsEditor
         settings={defaultSettings}
         onSave={vi.fn()}
-        onClose={vi.fn()}
         onReset={vi.fn()}
       />
     );
@@ -63,35 +81,28 @@ describe('SettingsDialog', () => {
     expect(tokenInput).toHaveValue('test-token');
   });
 
-  it('should call onClose when close button clicked', () => {
-    const onClose = vi.fn();
+  it('should switch between categories', () => {
     render(
-      <SettingsDialog
-        isOpen={true}
+      <SettingsEditor
         settings={defaultSettings}
         onSave={vi.fn()}
-        onClose={onClose}
         onReset={vi.fn()}
       />
     );
 
-    // Find close button (X icon)
-    const buttons = screen.getAllByRole('button');
-    const closeButton = buttons.find(btn => btn.querySelector('svg'));
-    if (closeButton) {
-      fireEvent.click(closeButton);
-      expect(onClose).toHaveBeenCalled();
-    }
+    // Click on Terminal category
+    fireEvent.click(screen.getByText('Terminal'));
+    
+    // Should show terminal settings
+    expect(screen.getByText('Default Shell')).toBeInTheDocument();
   });
 
   it('should call onSave with updated settings', () => {
     const onSave = vi.fn();
     render(
-      <SettingsDialog
-        isOpen={true}
+      <SettingsEditor
         settings={defaultSettings}
         onSave={onSave}
-        onClose={vi.fn()}
         onReset={vi.fn()}
       />
     );

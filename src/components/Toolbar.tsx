@@ -1,4 +1,4 @@
-import { Plug, Unplug, PlugZap, Terminal, GitBranch, FileCheck, Settings, PanelLeftClose, PanelLeft, RefreshCw, Trash2 } from 'lucide-react';
+import { Plug, Unplug, PlugZap, Terminal, GitBranch, FileCheck, PanelLeftClose, PanelLeft, RefreshCw } from 'lucide-react';
 import { ConnectionStatus } from '../types';
 
 interface ToolbarProps {
@@ -8,10 +8,6 @@ interface ToolbarProps {
   onOpenTerminal?: () => void;
   onOpenBranchManager?: () => void;
   onOpenPendingChanges?: () => void;
-  onOpenSettings?: () => void;
-  onNewChat?: () => void;
-  onToggleSidebar?: () => void;
-  sidebarOpen?: boolean;
   pendingChangesCount?: number;
   hasMessages?: boolean;
 }
@@ -23,10 +19,6 @@ export function Toolbar({
   onOpenTerminal,
   onOpenBranchManager,
   onOpenPendingChanges,
-  onOpenSettings,
-  onNewChat,
-  onToggleSidebar,
-  sidebarOpen = false,
   pendingChangesCount = 0,
   hasMessages = false,
 }: ToolbarProps) {
@@ -36,25 +28,12 @@ export function Toolbar({
   // Reusable button component styles
   const btnBase = "flex items-center justify-center w-8 h-8 transition-all";
   const btnEnabled = "text-text-secondary hover:text-text-primary hover:bg-bg-hover";
-  const btnDisabled = "text-text-secondary opacity-40 cursor-not-allowed";
+  const btnDisabled = "text-text-secondary opacity-40";
 
   return (
     <div className="flex items-center h-10 bg-bg-secondary border-b border-border px-2 gap-0.5">
       {/* Left group: Connection */}
       <div className="flex items-center gap-0.5">
-        {/* Toggle sidebar */}
-        {onToggleSidebar && (
-          <button
-            className={`${btnBase} ${btnEnabled}`}
-            onClick={onToggleSidebar}
-            title={sidebarOpen ? 'Hide favorites' : 'Show favorites'}
-          >
-            {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
-          </button>
-        )}
-
-        <div className="w-px h-5 bg-border mx-1" />
-
         {/* Connect/Disconnect */}
         {isConnected ? (
           <button
@@ -119,30 +98,6 @@ export function Toolbar({
 
       {/* Spacer */}
       <div className="flex-1" />
-
-      {/* Right group: Chat & Settings */}
-      <div className="flex items-center gap-0.5">
-        {/* New Chat */}
-        <button
-          className={`${btnBase} ${hasMessages ? btnEnabled : btnDisabled}`}
-          onClick={onNewChat}
-          disabled={!hasMessages}
-          title="Start new chat"
-        >
-          <Trash2 size={16} />
-        </button>
-
-        <div className="w-px h-5 bg-border mx-1" />
-
-        {/* Settings */}
-        <button
-          className={`${btnBase} ${btnEnabled}`}
-          onClick={onOpenSettings}
-          title="Settings"
-        >
-          <Settings size={18} />
-        </button>
-      </div>
     </div>
   );
 }

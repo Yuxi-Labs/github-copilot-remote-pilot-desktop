@@ -204,7 +204,6 @@ body {
 
 .action-button-primary:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Card/Panel styling */

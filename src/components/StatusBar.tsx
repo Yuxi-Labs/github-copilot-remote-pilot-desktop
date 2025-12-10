@@ -8,6 +8,7 @@ interface StatusBarProps {
   latency?: number;
   connectionQuality?: 'good' | 'fair' | 'poor' | 'unknown';
   bandwidthMode?: 'high' | 'medium' | 'low';
+  batteryMode?: 'normal' | 'saver';
   isOnline?: boolean;
   reconnectAttempts?: number;
   onManualReconnect?: () => void;
@@ -20,6 +21,13 @@ interface StatusBarProps {
   onOpenBranchManager?: () => void;
   isStreaming?: boolean;
   streamingStatus?: string;
+  editorInfo?: {
+    fileName: string;
+    language: string;
+    lineCount: number;
+    charCount: number;
+    hasChanges: boolean;
+  } | null;
 }
 
 export function StatusBar({
@@ -29,6 +37,7 @@ export function StatusBar({
   latency,
   connectionQuality = 'unknown',
   bandwidthMode,
+  batteryMode,
   isOnline = true,
   reconnectAttempts = 0,
   onManualReconnect,
@@ -40,6 +49,7 @@ export function StatusBar({
   onOpenBranchManager,
   isStreaming,
   streamingStatus,
+  editorInfo,
 }: StatusBarProps) {
   const isConnected = connectionStatus === 'connected';
 
@@ -117,6 +127,18 @@ export function StatusBar({
 
       {/* Center section - contextual info */}
       <div className="flex items-center gap-3">
+        {/* Editor info */}
+        {editorInfo && (
+          <div className="flex items-center gap-3 text-text-secondary">
+            <span>{editorInfo.fileName}</span>
+            <span>{editorInfo.language}</span>
+            <span>Ln {editorInfo.lineCount}, Ch {editorInfo.charCount}</span>
+            {editorInfo.hasChanges && (
+              <span className="text-warning">Modified</span>
+            )}
+          </div>
+        )}
+        
         {/* Pending changes indicator - clickable */}
         {pendingChangesCount > 0 && (
           <button

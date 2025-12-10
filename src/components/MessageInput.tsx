@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
 import { Send, StopCircle, ChevronDown, FileCode, Mic, MicOff, Loader2, FolderOpen, Paperclip, X } from 'lucide-react';
 import { type ModelInfo, type ModeInfo, type ChatMode, type ContextFile } from '../types';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface ContextItem {
   type: 'file' | 'selection' | 'terminal' | 'workspace';
@@ -55,6 +56,56 @@ export function MessageInput({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const { showContextMenu } = useContextMenu();
+
+  // Context menu for textarea
+  const handleTextareaContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const textarea = textareaRef.current;
+    const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
+    const hasText = message.length > 0;
+    
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Cut',
+        shortcut: 'Ctrl+X',
+        action: () => document.execCommand('cut'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Copy',
+        shortcut: 'Ctrl+C',
+        action: () => document.execCommand('copy'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Paste',
+        shortcut: 'Ctrl+V',
+        action: () => document.execCommand('paste'),
+      },
+      { divider: true },
+      {
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        action: () => {
+          if (textarea) {
+            textarea.select();
+          }
+        },
+        disabled: !hasText,
+      },
+      { divider: true },
+      {
+        label: 'Clear',
+        action: () => setMessage(''),
+        disabled: !hasText,
+      },
+    ];
+    
+    showContextMenu(e, items);
+  }, [message, showContextMenu]);
 
   // Voice input
   const {

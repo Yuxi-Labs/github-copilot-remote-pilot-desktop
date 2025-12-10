@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Save, RotateCcw, ExternalLink, FileCode } from 'lucide-react';
 import { wsClient } from '../services/websocket';
 import { ControllerMessage } from '../types';
+import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface FileEditorProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface FileEditorProps {
   initialContent: string;
   language?: string;
   onSaved?: () => void;
+  onEditorInfoChange?: (info: { fileName: string; language: string; lineCount: number; charCount: number; hasChanges: boolean }) => void;
 }
 
 export function FileEditor({
@@ -19,16 +20,21 @@ export function FileEditor({
   initialContent,
   language = 'plaintext',
   onSaved,
+  onEditorInfoChange,
 }: FileEditorProps) {
+  const { showContextMenu } = useContextMenu();
   const [content, setContent] = useState(initialContent);
   const [originalContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   const hasChanges = content !== originalContent;
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
+  const lineCount = content.split('\n').length;
+  const charCount = content.length;
 
   // Reset state when file changes
   useEffect(() => {
@@ -36,6 +42,19 @@ export function FileEditor({
     setError(null);
     setSaved(false);
   }, [initialContent, filePath]);
+
+  // Send editor info to status bar
+  useEffect(() => {
+    if (isOpen && onEditorInfoChange) {
+      onEditorInfoChange({
+        fileName,
+        language,
+        lineCount,
+        charCount,
+        hasChanges,
+      });
+    }
+  }, [isOpen, fileName, language, lineCount, charCount, hasChanges, onEditorInfoChange]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -52,13 +71,13 @@ export function FileEditor({
       
       // Escape to close
       if (e.key === 'Escape') {
-        handleClose();
+        onClose();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, hasChanges, saving]);
+  }, [isOpen, hasChanges, saving, onClose]);
 
   const handleApplyChanges = useCallback(() => {
     if (!hasChanges || saving) return;
@@ -127,17 +146,12 @@ Please analyze the differences and apply the appropriate code changes.`;
     setSaved(false);
   }, [originalContent]);
 
-  const handleOpenInVSCode = useCallback(() => {
-    wsClient.openFile(filePath);
-  }, [filePath]);
-
-  const handleClose = useCallback(() => {
-    if (hasChanges) {
-      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to close?');
-      if (!confirmed) return;
+  // Sync line numbers scroll with textarea
+  const handleScroll = useCallback(() => {
+    if (textareaRef.current && lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
     }
-    onClose();
-  }, [hasChanges, onClose]);
+  }, []);
 
   // Handle Tab key for indentation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -161,12 +175,66 @@ Please analyze the differences and apply the appropriate code changes.`;
     }
   };
 
+  // Handle context menu for editor
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const textarea = textareaRef.current;
+    const hasSelection = textarea && textarea.selectionStart !== textarea.selectionEnd;
+    
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Cut',
+        shortcut: 'Ctrl+X',
+        action: () => document.execCommand('cut'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Copy',
+        shortcut: 'Ctrl+C',
+        action: () => document.execCommand('copy'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Paste',
+        shortcut: 'Ctrl+V',
+        action: () => document.execCommand('paste'),
+      },
+      { divider: true },
+      {
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        action: () => document.execCommand('selectAll'),
+      },
+      { divider: true },
+      {
+        label: 'Revert Changes',
+        action: handleRevert,
+        disabled: !hasChanges,
+      },
+    ];
+    
+    showContextMenu(e, items);
+  }, [hasChanges, handleRevert, showContextMenu]);
+
   if (!isOpen) return null;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Editor */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex">
+        {/* Line numbers */}
+        <div 
+          ref={lineNumbersRef}
+          className="bg-[#1e1e1e] text-[#858585] text-right pr-3 pl-4 py-4 font-mono select-none overflow-hidden"
+          style={{ minWidth: '50px', fontSize: '15px', lineHeight: '21px' }}
+        >
+          {Array.from({ length: lineCount }, (_, i) => (
+            <div key={i + 1}>{i + 1}</div>
+          ))}
+        </div>
+        {/* Text editor */}
         <textarea
           ref={textareaRef}
           value={content}
@@ -175,66 +243,14 @@ Please analyze the differences and apply the appropriate code changes.`;
             setSaved(false);
           }}
           onKeyDown={handleKeyDown}
-          className="w-full h-full p-4 bg-bg-primary text-text-primary font-mono text-sm resize-none focus:outline-none"
+          onScroll={handleScroll}
+          onContextMenu={handleEditorContextMenu}
+          className="flex-1 p-4 bg-bg-primary text-text-primary font-mono resize-none focus:outline-none"
+          style={{ fontSize: '15px', lineHeight: '21px' }}
           spellCheck={false}
           placeholder="File content..."
+          data-context-menu
         />
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-bg-secondary">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-text-secondary">
-            {language}
-          </span>
-          <span className="text-xs text-text-secondary">
-            • {content.split('\n').length} lines
-          </span>
-          <span className="text-xs text-text-secondary">
-            • {content.length} chars
-          </span>
-          {hasChanges && (
-            <span className="text-xs text-warning px-1.5 py-0.5 bg-warning/10 rounded">
-              Modified
-            </span>
-          )}
-          {saved && !hasChanges && (
-            <span className="text-xs text-success px-1.5 py-0.5 bg-success/10 rounded">
-              Saved
-            </span>
-          )}
-        </div>
-
-        {error && (
-          <span className="text-xs text-error">{error}</span>
-        )}
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleOpenInVSCode}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            title="Open in VS Code"
-          >
-            <ExternalLink size={14} />
-          </button>
-          <button
-            onClick={handleRevert}
-            disabled={!hasChanges || saving}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Revert changes"
-          >
-            <RotateCcw size={14} />
-          </button>
-          <button
-            onClick={handleApplyChanges}
-            disabled={!hasChanges || saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Apply changes via Copilot (Ctrl+S)"
-          >
-            <Save size={14} />
-            <span>{saving ? 'Applying...' : 'Apply Changes'}</span>
-          </button>
-        </div>
       </div>
     </div>
   );

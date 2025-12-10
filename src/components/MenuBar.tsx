@@ -1,71 +1,95 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  MessageSquarePlus,
-  Download,
-  Settings,
+  Plug,
+  Unplug,
+  FilePlus,
+  FolderPlus,
+  Save,
+  SaveAll,
   LogOut,
+  Undo2,
+  Redo2,
+  Scissors,
   Copy,
   Clipboard,
-  Trash2,
+  Terminal,
+  Minimize2,
+  Maximize2,
+  Settings,
+  Link,
   HelpCircle,
+  Bug,
+  Lightbulb,
   Info,
-  Star,
-  Smartphone,
-  Sun,
-  Moon,
-  Monitor,
-  GitBranch,
-  FileCheck,
+  ChevronRight,
 } from 'lucide-react';
 
 interface MenuBarProps {
-  onNewChat: () => void;
-  onExportChat: () => void;
-  onOpenSettings: () => void;
+  // File menu
+  isConnected: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onNewFile?: () => void;
+  onNewFolder?: () => void;
+  onSave?: () => void;
+  onSaveAs?: () => void;
+  onSaveAll?: () => void;
   onExit: () => void;
+  // Edit menu
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onCut?: () => void;
   onCopy: () => void;
   onPaste: () => void;
-  onClearChat: () => void;
-  onShowAbout: () => void;
+  // View menu
+  terminalOpen: boolean;
+  terminalMaximized: boolean;
+  onToggleTerminal: () => void;
+  onMinimizeTerminal: () => void;
+  onMaximizeTerminal: () => void;
+  onOpenSettings: () => void;
+  // Tools menu
+  onOpenConnections: () => void;
+  // Help menu
   onShowDocs: () => void;
-  onOpenFavorites: () => void;
-  onOpenSessions: () => void;
-  onOpenBranchManager: () => void;
-  onOpenChangeApproval: () => void;
-  pendingChangesCount?: number;
-  theme?: 'dark' | 'light' | 'system';
-  onThemeChange?: (theme: 'dark' | 'light' | 'system') => void;
+  onReportIssue: () => void;
+  onRequestFeature: () => void;
+  onShowAbout: () => void;
 }
 
 interface MenuProps {
   label: string;
   children: React.ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
 }
 
-function Menu({ label, children }: MenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+function Menu({ label, children, isOpen, onToggle, onClose }: MenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        onClose();
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen, onClose]);
 
   return (
     <div ref={menuRef} className="relative">
       <button
-        className="px-2.5 py-1 text-sm text-text-primary hover:bg-bg-hover"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`px-2.5 py-1 text-sm text-text-primary hover:bg-bg-hover ${isOpen ? 'bg-bg-hover' : ''}`}
+        onClick={onToggle}
       >
         {label}
       </button>
       {isOpen && (
-        <div className="absolute top-full left-0 mt-0.5 min-w-[200px] bg-bg-primary border border-border shadow-lg z-50 py-1">
+        <div className="absolute top-full left-0 mt-0 min-w-[220px] bg-[#252526] border border-[#454545] shadow-lg z-50 py-1">
           {children}
         </div>
       )}
@@ -74,112 +98,305 @@ function Menu({ label, children }: MenuProps) {
 }
 
 interface MenuItemProps {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
   shortcut?: string;
-  checked?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }
 
-function MenuItem({ icon, label, shortcut, checked, onClick }: MenuItemProps) {
+function MenuItem({ icon, label, shortcut, disabled, onClick }: MenuItemProps) {
   return (
     <button
-      className="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-text-primary hover:bg-bg-hover text-left"
-      onClick={onClick}
+      className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-[13px] text-left ${
+        disabled 
+          ? 'text-[#6e6e6e] cursor-not-allowed' 
+          : 'text-[#cccccc] hover:bg-[#094771]'
+      }`}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
     >
-      <span className="w-4 h-4 flex items-center justify-center">{icon}</span>
+      <span className="w-4 h-4 flex items-center justify-center">
+        {icon || null}
+      </span>
       <span className="flex-1">{label}</span>
-      {shortcut && <span className="text-xs text-text-secondary">{shortcut}</span>}
-      {checked !== undefined && (
-        <span className="text-accent font-bold">{checked ? '✓' : ''}</span>
-      )}
+      {shortcut && <span className="text-[11px] text-[#6e6e6e]">{shortcut}</span>}
     </button>
   );
 }
 
+interface SubMenuProps {
+  icon?: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}
+
+function SubMenu({ icon, label, children }: SubMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div 
+      className="relative"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <div className="flex items-center gap-2.5 w-full px-3 py-1.5 text-[13px] text-left text-[#cccccc] hover:bg-[#094771] cursor-pointer">
+        <span className="w-4 h-4 flex items-center justify-center">
+          {icon || null}
+        </span>
+        <span className="flex-1">{label}</span>
+        <ChevronRight size={12} className="text-[#6e6e6e]" />
+      </div>
+      {isOpen && (
+        <div className="absolute left-full top-0 min-w-[180px] bg-[#252526] border border-[#454545] shadow-lg py-1" style={{ marginLeft: -1 }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MenuSeparator() {
-  return <div className="h-px bg-border mx-2 my-1" />;
+  return <div className="h-px bg-[#454545] my-1" />;
 }
 
 export function MenuBar({
-  onNewChat,
-  onExportChat,
-  onOpenSettings,
+  isConnected,
+  onConnect,
+  onDisconnect,
+  onNewFile,
+  onNewFolder,
+  onSave,
+  onSaveAs,
+  onSaveAll,
   onExit,
+  onUndo,
+  onRedo,
+  onCut,
   onCopy,
   onPaste,
-  onClearChat,
-  onShowAbout,
+  terminalOpen,
+  terminalMaximized,
+  onToggleTerminal,
+  onMinimizeTerminal,
+  onMaximizeTerminal,
+  onOpenSettings,
+  onOpenConnections,
   onShowDocs,
-  onOpenFavorites,
-  onOpenSessions,
-  onOpenBranchManager,
-  onOpenChangeApproval,
-  pendingChangesCount = 0,
-  theme,
-  onThemeChange,
+  onReportIssue,
+  onRequestFeature,
+  onShowAbout,
 }: MenuBarProps) {
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const handleMenuToggle = (menu: string) => {
+    setOpenMenu(openMenu === menu ? null : menu);
+  };
+
+  const handleMenuClose = () => {
+    setOpenMenu(null);
+  };
+
+  const handleItemClick = (callback: (() => void) | undefined) => {
+    if (callback) {
+      callback();
+    }
+    handleMenuClose();
+  };
+
   return (
     <div
-      className="flex items-center h-8 bg-bg-secondary border-b border-border px-2 select-none"
+      className="flex items-center h-8 bg-[#3c3c3c] border-b border-[#252526] px-2 select-none"
       data-tauri-drag-region
     >
-      <div className="flex gap-0.5">
-        <Menu label="File">
-          <MenuItem icon={<MessageSquarePlus size={14} />} label="New Chat" shortcut="Ctrl+N" onClick={onNewChat} />
-          <MenuItem icon={<Download size={14} />} label="Export Chat" shortcut="Ctrl+E" onClick={onExportChat} />
+      <div className="flex gap-0">
+        {/* File Menu */}
+        <Menu 
+          label="File" 
+          isOpen={openMenu === 'file'} 
+          onToggle={() => handleMenuToggle('file')}
+          onClose={handleMenuClose}
+        >
+          {isConnected ? (
+            <MenuItem 
+              icon={<Unplug size={14} />} 
+              label="Disconnect" 
+              onClick={() => handleItemClick(onDisconnect)} 
+            />
+          ) : (
+            <MenuItem 
+              icon={<Plug size={14} />} 
+              label="Connect" 
+              onClick={() => handleItemClick(onConnect)} 
+            />
+          )}
           <MenuSeparator />
-          <MenuItem icon={<Settings size={14} />} label="Settings" shortcut="Ctrl+," onClick={onOpenSettings} />
-          <MenuSeparator />
-          <MenuItem icon={<LogOut size={14} />} label="Exit" shortcut="Alt+F4" onClick={onExit} />
-        </Menu>
-
-        <Menu label="Edit">
-          <MenuItem icon={<Copy size={14} />} label="Copy" shortcut="Ctrl+C" onClick={onCopy} />
-          <MenuItem icon={<Clipboard size={14} />} label="Paste" shortcut="Ctrl+V" onClick={onPaste} />
-          <MenuSeparator />
-          <MenuItem icon={<Trash2 size={14} />} label="Clear Chat" onClick={onClearChat} />
-        </Menu>
-
-        <Menu label="View">
-          <MenuItem icon={<Star size={14} />} label="Connections" onClick={onOpenFavorites} />
-          <MenuItem icon={<Smartphone size={14} />} label="Sessions" onClick={onOpenSessions} />
-          <MenuSeparator />
-          <div className="px-2 py-1 text-xs text-text-secondary">Theme</div>
           <MenuItem 
-            icon={<Sun size={14} />} 
-            label="Light" 
-            onClick={() => onThemeChange?.('light')}
-            checked={theme === 'light'}
+            icon={<FilePlus size={14} />} 
+            label="New File" 
+            shortcut="Ctrl+N"
+            disabled={!onNewFile}
+            onClick={() => handleItemClick(onNewFile)} 
           />
           <MenuItem 
-            icon={<Moon size={14} />} 
-            label="Dark" 
-            onClick={() => onThemeChange?.('dark')}
-            checked={theme === 'dark'}
+            icon={<FolderPlus size={14} />} 
+            label="New Folder" 
+            disabled={!onNewFolder}
+            onClick={() => handleItemClick(onNewFolder)} 
           />
-          <MenuItem 
-            icon={<Monitor size={14} />} 
-            label="System" 
-            onClick={() => onThemeChange?.('system')}
-            checked={theme === 'system'}
-          />
-        </Menu>
-
-        <Menu label="Tools">
-          <MenuItem icon={<GitBranch size={14} />} label="Conversation Branches" shortcut="Ctrl+Shift+B" onClick={onOpenBranchManager} />
-          <MenuItem 
-            icon={<FileCheck size={14} />} 
-            label={pendingChangesCount > 0 ? `Pending Changes (${pendingChangesCount})` : "Pending Changes"} 
-            shortcut="Ctrl+Shift+C" 
-            onClick={onOpenChangeApproval} 
-          />
-        </Menu>
-
-        <Menu label="Help">
-          <MenuItem icon={<HelpCircle size={14} />} label="Documentation" shortcut="F1" onClick={onShowDocs} />
           <MenuSeparator />
-          <MenuItem icon={<Info size={14} />} label="About" onClick={onShowAbout} />
+          <MenuItem 
+            icon={<Save size={14} />} 
+            label="Save" 
+            shortcut="Ctrl+S"
+            disabled={!onSave}
+            onClick={() => handleItemClick(onSave)} 
+          />
+          <MenuItem 
+            icon={<Save size={14} />} 
+            label="Save As..." 
+            shortcut="Ctrl+Shift+S"
+            disabled={!onSaveAs}
+            onClick={() => handleItemClick(onSaveAs)} 
+          />
+          <MenuItem 
+            icon={<SaveAll size={14} />} 
+            label="Save All" 
+            disabled={!onSaveAll}
+            onClick={() => handleItemClick(onSaveAll)} 
+          />
+          <MenuSeparator />
+          <MenuItem 
+            icon={<LogOut size={14} />} 
+            label="Exit" 
+            shortcut="Alt+F4"
+            onClick={() => handleItemClick(onExit)} 
+          />
+        </Menu>
+
+        {/* Edit Menu */}
+        <Menu 
+          label="Edit" 
+          isOpen={openMenu === 'edit'} 
+          onToggle={() => handleMenuToggle('edit')}
+          onClose={handleMenuClose}
+        >
+          <MenuItem 
+            icon={<Undo2 size={14} />} 
+            label="Undo" 
+            shortcut="Ctrl+Z"
+            disabled={!onUndo}
+            onClick={() => handleItemClick(onUndo)} 
+          />
+          <MenuItem 
+            icon={<Redo2 size={14} />} 
+            label="Redo" 
+            shortcut="Ctrl+Y"
+            disabled={!onRedo}
+            onClick={() => handleItemClick(onRedo)} 
+          />
+          <MenuSeparator />
+          <MenuItem 
+            icon={<Scissors size={14} />} 
+            label="Cut" 
+            shortcut="Ctrl+X"
+            onClick={() => handleItemClick(onCut)} 
+          />
+          <MenuItem 
+            icon={<Copy size={14} />} 
+            label="Copy" 
+            shortcut="Ctrl+C"
+            onClick={() => handleItemClick(onCopy)} 
+          />
+          <MenuItem 
+            icon={<Clipboard size={14} />} 
+            label="Paste" 
+            shortcut="Ctrl+V"
+            onClick={() => handleItemClick(onPaste)} 
+          />
+        </Menu>
+
+        {/* View Menu */}
+        <Menu 
+          label="View" 
+          isOpen={openMenu === 'view'} 
+          onToggle={() => handleMenuToggle('view')}
+          onClose={handleMenuClose}
+        >
+          <SubMenu icon={<Terminal size={14} />} label="Terminal">
+            <MenuItem 
+              icon={<Terminal size={14} />} 
+              label={terminalOpen ? "Hide Terminal" : "Show Terminal"} 
+              shortcut="Ctrl+`"
+              onClick={() => handleItemClick(onToggleTerminal)} 
+            />
+            <MenuSeparator />
+            <MenuItem 
+              icon={<Minimize2 size={14} />} 
+              label="Minimize" 
+              disabled={!terminalOpen || !terminalMaximized}
+              onClick={() => handleItemClick(onMinimizeTerminal)} 
+            />
+            <MenuItem 
+              icon={<Maximize2 size={14} />} 
+              label="Maximize" 
+              disabled={!terminalOpen || terminalMaximized}
+              onClick={() => handleItemClick(onMaximizeTerminal)} 
+            />
+          </SubMenu>
+          <MenuSeparator />
+          <MenuItem 
+            icon={<Settings size={14} />} 
+            label="Settings" 
+            shortcut="Ctrl+,"
+            onClick={() => handleItemClick(onOpenSettings)} 
+          />
+        </Menu>
+
+        {/* Tools Menu */}
+        <Menu 
+          label="Tools" 
+          isOpen={openMenu === 'tools'} 
+          onToggle={() => handleMenuToggle('tools')}
+          onClose={handleMenuClose}
+        >
+          <MenuItem 
+            icon={<Link size={14} />} 
+            label="Connections" 
+            onClick={() => handleItemClick(onOpenConnections)} 
+          />
+        </Menu>
+
+        {/* Help Menu */}
+        <Menu 
+          label="Help" 
+          isOpen={openMenu === 'help'} 
+          onToggle={() => handleMenuToggle('help')}
+          onClose={handleMenuClose}
+        >
+          <MenuItem 
+            icon={<HelpCircle size={14} />} 
+            label="Documentation" 
+            shortcut="F1"
+            onClick={() => handleItemClick(onShowDocs)} 
+          />
+          <MenuSeparator />
+          <MenuItem 
+            icon={<Bug size={14} />} 
+            label="Report an Issue" 
+            onClick={() => handleItemClick(onReportIssue)} 
+          />
+          <MenuItem 
+            icon={<Lightbulb size={14} />} 
+            label="Request a Feature" 
+            onClick={() => handleItemClick(onRequestFeature)} 
+          />
+          <MenuSeparator />
+          <MenuItem 
+            icon={<Info size={14} />} 
+            label="About" 
+            onClick={() => handleItemClick(onShowAbout)} 
+          />
         </Menu>
       </div>
 

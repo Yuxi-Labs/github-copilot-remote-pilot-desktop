@@ -30,18 +30,7 @@ export function MessageList({ messages, onNewChat, onRetry, onRegenerate, onBran
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      {/* New Chat button at top of messages */}
-      <div className="sticky top-0 z-10 flex justify-end p-2 bg-bg-primary/80 backdrop-blur-sm border-b border-border">
-        <button
-          onClick={onNewChat}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-          title="New Chat"
-        >
-          <MessageSquarePlus size={14} />
-          <span>New Chat</span>
-        </button>
-      </div>
+    <div className="flex-1 overflow-y-auto p-4">
       {messages.map((message, index) => (
         <Message 
           key={message.id} 

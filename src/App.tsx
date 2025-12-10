@@ -6,6 +6,7 @@ import { useSystemOptimization } from './hooks/useSystemOptimization';
 import { useTheme } from './hooks/useTheme';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { useWindowState } from './hooks/useWindowState';
+import { useContextMenu, ContextMenuItem } from './components/ContextMenu';
 import { wsClient } from './services/websocket';
 import { saveConnection } from './utils/connectionFavorites';
 import { getDeviceName } from './utils/devicePairing';
@@ -34,12 +35,11 @@ import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { StatusBar } from './components/StatusBar';
 import { ChatView } from './components/ChatView';
-import { SettingsDialog } from './components/SettingsDialog';
+import { SettingsEditor } from './components/SettingsDialog';
 import { AboutDialog } from './components/AboutDialog';
 import { WorkspaceExplorer } from './components/WorkspaceExplorer';
 import { FileEditor } from './components/FileEditor';
 import { Terminal } from './components/Terminal';
-import { FavoritesSidebar } from './components/FavoritesSidebar';
 import { PairingDialog } from './components/PairingDialog';
 import { SessionManagementDialog } from './components/SessionManagementDialog';
 import { BranchManager } from './components/BranchManager';
@@ -63,14 +63,14 @@ function App() {
   const { theme, setTheme } = useTheme();
   const isOnline = useNetworkStatus();
   useWindowState(); // Persist window size/position
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { showContextMenu } = useContextMenu();
   const [settingsInitialTab, setSettingsInitialTab] = useState<'connection' | 'terminal' | 'appearance'>('connection');
   const [aboutOpen, setAboutOpen] = useState(false);
   const [explorerWidth, setExplorerWidth] = useState(220);
+  const [chatWidth, setChatWidth] = useState(420);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(200);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [branchManagerOpen, setBranchManagerOpen] = useState(false);
@@ -96,6 +96,13 @@ function App() {
     content: string;
     language?: string;
   }>({ isOpen: false, filePath: '', content: '' });
+  const [editorInfo, setEditorInfo] = useState<{
+    fileName: string;
+    language: string;
+    lineCount: number;
+    charCount: number;
+    hasChanges: boolean;
+  } | null>(null);
   const [openTabs, setOpenTabs] = useState<{ path: string; name: string; isPreview: boolean; content: string; language?: string }[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
@@ -222,6 +229,21 @@ function App() {
     exportChat(messages, 'markdown');
   }, [messages]);
 
+  // Open Settings as a tab
+  const openSettingsTab = useCallback((initialTab?: 'connection' | 'terminal' | 'appearance') => {
+    if (initialTab) {
+      setSettingsInitialTab(initialTab);
+    }
+    const settingsPath = 'settings://Settings';
+    setOpenTabs(prev => {
+      const existing = prev.find(tab => tab.path === settingsPath);
+      if (existing) return prev;
+      return [...prev, { path: settingsPath, name: 'Settings', isPreview: false, content: '', language: 'settings' }];
+    });
+    setActiveTab(settingsPath);
+    setEditorState({ isOpen: false, filePath: '', content: '' }); // Clear file editor state
+  }, []);
+
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -238,7 +260,7 @@ function App() {
       // Ctrl+,: Settings
       if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault();
-        setSettingsOpen(true);
+        openSettingsTab();
       }
       // Ctrl+E: Export Chat
       if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
@@ -269,14 +291,10 @@ function App() {
       if (e.key === 'Escape') {
         if (currentStreamingId) {
           cancelMessage(currentStreamingId);
-        } else if (settingsOpen) {
-          setSettingsOpen(false);
         } else if (aboutOpen) {
           setAboutOpen(false);
         } else if (terminalOpen) {
           setTerminalOpen(false);
-        } else if (favoritesOpen) {
-          setFavoritesOpen(false);
         } else if (sessionsOpen) {
           setSessionsOpen(false);
         } else if (branchManagerOpen) {
@@ -289,7 +307,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentStreamingId, cancelMessage, clearMessages, settingsOpen, aboutOpen, terminalOpen, favoritesOpen, sessionsOpen, handleExportChat]);
+  }, [currentStreamingId, cancelMessage, clearMessages, aboutOpen, terminalOpen, sessionsOpen, handleExportChat, openSettingsTab]);
 
   // Send battery and bandwidth optimization to controller
   useEffect(() => {
@@ -428,11 +446,11 @@ function App() {
 
   const handleConnect = useCallback(() => {
     if (!settings.connectionUrl || !settings.authToken) {
-      setSettingsOpen(true);
+      openSettingsTab('connection');
       return;
     }
     connect();
-  }, [settings.connectionUrl, settings.authToken, connect]);
+  }, [settings.connectionUrl, settings.authToken, connect, openSettingsTab]);
 
   const handleCancelMessage = useCallback(() => {
     if (currentStreamingId) {
@@ -502,28 +520,156 @@ function App() {
     }
   }, [messages, sendMessage, selectedModel, includeContext, selectedMode]);
 
+  // Build generic context menu items
+  const buildGenericContextMenu = useCallback((): ContextMenuItem[] => {
+    const hasSelection = window.getSelection()?.toString().trim();
+    return [
+      {
+        label: 'Cut',
+        shortcut: 'Ctrl+X',
+        action: () => document.execCommand('cut'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Copy',
+        shortcut: 'Ctrl+C',
+        action: () => document.execCommand('copy'),
+        disabled: !hasSelection,
+      },
+      {
+        label: 'Paste',
+        shortcut: 'Ctrl+V',
+        action: () => document.execCommand('paste'),
+      },
+      { divider: true },
+      {
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        action: () => document.execCommand('selectAll'),
+      },
+    ];
+  }, []);
+
+  // Handle tab context menu
+  const handleTabContextMenu = useCallback((e: React.MouseEvent, tabPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Close',
+        action: () => {
+          setOpenTabs(prev => {
+            const filtered = prev.filter(t => t.path !== tabPath);
+            if (activeTab === tabPath && filtered.length > 0) {
+              const newActive = filtered[filtered.length - 1];
+              setActiveTab(newActive.path);
+              setEditorState({
+                isOpen: true,
+                filePath: newActive.path,
+                content: newActive.content,
+                language: newActive.language,
+              });
+            } else if (filtered.length === 0) {
+              setActiveTab(null);
+              setEditorState({ isOpen: false, filePath: '', content: '' });
+            }
+            return filtered;
+          });
+        },
+      },
+      {
+        label: 'Close Others',
+        action: () => {
+          setOpenTabs(prev => prev.filter(t => t.path === tabPath));
+          const tab = openTabs.find(t => t.path === tabPath);
+          if (tab) {
+            setActiveTab(tabPath);
+            setEditorState({
+              isOpen: true,
+              filePath: tab.path,
+              content: tab.content,
+              language: tab.language,
+            });
+          }
+        },
+        disabled: openTabs.length <= 1,
+      },
+      {
+        label: 'Close All',
+        action: () => {
+          setOpenTabs([]);
+          setActiveTab(null);
+          setEditorState({ isOpen: false, filePath: '', content: '' });
+        },
+      },
+      { divider: true },
+      {
+        label: 'Copy Path',
+        action: async () => {
+          await navigator.clipboard.writeText(tabPath);
+        },
+      },
+    ];
+    
+    showContextMenu(e, items);
+  }, [activeTab, openTabs, showContextMenu]);
+
+  // Handle context menu for generic areas
+  const handleAppContextMenu = useCallback((e: React.MouseEvent) => {
+    // Only show generic menu if the event didn't bubble up from a more specific handler
+    if ((e.target as HTMLElement).closest('[data-context-menu]')) {
+      return; // Let the specific context menu handler handle it
+    }
+    e.preventDefault();
+    showContextMenu(e, buildGenericContextMenu());
+  }, [showContextMenu, buildGenericContextMenu]);
+
   return (
-    <div className="flex flex-col h-screen bg-bg-primary">
+    <div 
+      className="flex flex-col h-screen bg-bg-primary"
+      onContextMenu={handleAppContextMenu}
+    >
       {/* Menu Bar */}
       <MenuBar
-        onNewChat={handleNewChat}
-        onExportChat={handleExportChat}
-        onOpenSettings={() => setSettingsOpen(true)}
+        isConnected={isConnected}
+        onConnect={handleConnect}
+        onDisconnect={disconnect}
+        onNewFile={() => {
+          // TODO: Implement new file creation
+        }}
+        onNewFolder={() => {
+          // TODO: Implement new folder creation
+        }}
+        onSave={() => {
+          // Save current file via AI
+          if (editorState.isOpen && activeTab) {
+            // Trigger save via FileEditor's Save button functionality
+          }
+        }}
+        onSaveAs={() => {
+          // TODO: Implement save as
+        }}
+        onSaveAll={() => {
+          // Save all modified tabs via AI
+        }}
         onExit={handleExit}
+        onUndo={() => document.execCommand('undo')}
+        onRedo={() => document.execCommand('redo')}
+        onCut={() => document.execCommand('cut')}
         onCopy={handleCopy}
         onPaste={handlePaste}
-        onClearChat={clearMessages}
-        onShowAbout={handleShowAbout}
+        terminalOpen={terminalOpen}
+        terminalMaximized={terminalMaximized}
+        onToggleTerminal={() => setTerminalOpen(!terminalOpen)}
+        onMinimizeTerminal={() => setTerminalMaximized(false)}
+        onMaximizeTerminal={() => setTerminalMaximized(true)}
+        onOpenSettings={() => openSettingsTab()}
+        onOpenConnections={() => openSettingsTab('connection')}
         onShowDocs={handleShowDocs}
-        onOpenFavorites={() => setFavoritesOpen(true)}
-        onOpenSessions={() => setSessionsOpen(true)}
-        onOpenBranchManager={() => setBranchManagerOpen(true)}
-        onOpenChangeApproval={() => setChangeApprovalOpen(true)}
-        pendingChangesCount={pendingChangeGroups.reduce((count, group) => {
-          return count + group.changes.filter(c => c.status === 'pending').length;
-        }, 0)}
-        theme={theme}
-        onThemeChange={setTheme}
+        onReportIssue={() => window.open('https://github.com/Yuxi-Labs/github-copilot-remote-pilot-desktop/issues/new?labels=bug', '_blank')}
+        onRequestFeature={() => window.open('https://github.com/Yuxi-Labs/github-copilot-remote-pilot-desktop/issues/new?labels=enhancement', '_blank')}
+        onShowAbout={handleShowAbout}
       />
 
       {/* Error Notification */}
@@ -543,10 +689,6 @@ function App() {
         onOpenTerminal={() => setTerminalOpen(true)}
         onOpenBranchManager={() => setBranchManagerOpen(true)}
         onOpenPendingChanges={() => setChangeApprovalOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onNewChat={handleNewChat}
-        onToggleSidebar={() => setFavoritesOpen(!favoritesOpen)}
-        sidebarOpen={favoritesOpen}
         pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
           count + group.changes.filter(c => c.status === 'pending').length, 0)}
         hasMessages={messages.length > 0}
@@ -598,17 +740,37 @@ function App() {
           />
         </div>
 
+        {/* Resize handle for Explorer */}
+        <div
+          className="w-px bg-border hover:bg-accent cursor-col-resize transition-colors shrink-0"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startWidth = explorerWidth;
+            const handleMouseMove = (e: MouseEvent) => {
+              const newWidth = Math.max(150, Math.min(600, startWidth + e.clientX - startX));
+              setExplorerWidth(newWidth);
+            };
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+        />
+
         {/* Center: Editor area + Terminal (stacked) */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Editor/content area */}
           <div className={`bg-bg-primary flex-1 min-h-0 flex flex-col ${terminalOpen && !terminalMaximized ? '' : ''}`} style={terminalOpen && !terminalMaximized ? { flex: `1 1 calc(100% - ${terminalHeight}px)` } : undefined}>
             {/* Tabs Row */}
             {openTabs.length > 0 && (
-              <div className="flex items-center overflow-x-auto border-b border-border bg-bg-secondary">
+              <div className="flex items-center overflow-x-auto border-b border-border bg-bg-secondary" style={{ height: '32px' }}>
                 {openTabs.map(tab => (
                   <div
                     key={tab.path}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-border cursor-pointer hover:bg-bg-hover ${
+                    className={`flex items-center gap-1.5 px-3 h-full text-xs border-r border-border cursor-pointer hover:bg-bg-hover ${
                       activeTab === tab.path ? 'bg-bg-primary text-text-primary' : 'text-text-secondary'
                     }`}
                     onClick={() => {
@@ -620,6 +782,8 @@ function App() {
                         language: tab.language,
                       });
                     }}
+                    onContextMenu={(e) => handleTabContextMenu(e, tab.path)}
+                    data-context-menu
                   >
                     <span className={tab.isPreview ? 'italic' : ''}>{tab.name}</span>
                     <button
@@ -652,8 +816,16 @@ function App() {
               </div>
             )}
             
-            {/* Editor or Welcome */}
-            {editorState.isOpen ? (
+            {/* Editor, Settings, or Welcome */}
+            {activeTab === 'settings://Settings' ? (
+              <SettingsEditor
+                settings={settings}
+                onSave={updateSettings}
+                onReset={resetSettings}
+                initialTab={settingsInitialTab}
+                availableModels={availableModels}
+              />
+            ) : editorState.isOpen ? (
               <FileEditor
                 isOpen={true}
                 filePath={editorState.filePath}
@@ -663,10 +835,12 @@ function App() {
                   setOpenTabs(prev => prev.filter(t => t.path !== editorState.filePath));
                   setEditorState({ isOpen: false, filePath: '', content: '' });
                   setActiveTab(null);
+                  setEditorInfo(null);
                 }}
                 onSaved={() => {
                   // File saved via Copilot
                 }}
+                onEditorInfoChange={setEditorInfo}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-text-secondary text-sm">
@@ -680,26 +854,64 @@ function App() {
 
           {/* Terminal Panel */}
           {terminalOpen && (
-            <div 
-              className="shrink-0" 
-              style={{ height: terminalMaximized ? '100%' : terminalHeight }}
-            >
+            <>
+              {/* Resize handle for Terminal */}
+              <div
+                className="h-px bg-border hover:bg-accent cursor-row-resize transition-colors shrink-0"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startY = e.clientY;
+                  const startHeight = terminalHeight;
+                  const handleMouseMove = (e: MouseEvent) => {
+                    const newHeight = Math.max(100, Math.min(600, startHeight - (e.clientY - startY)));
+                    setTerminalHeight(newHeight);
+                  };
+                  const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                  };
+                  document.addEventListener('mousemove', handleMouseMove);
+                  document.addEventListener('mouseup', handleMouseUp);
+                }}
+              />
+              <div 
+                className="shrink-0" 
+                style={{ height: terminalMaximized ? '100%' : terminalHeight }}
+              >
               <Terminal
                 isOpen={terminalOpen}
                 onClose={() => setTerminalOpen(false)}
                 onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
                 isMaximized={terminalMaximized}
-                onOpenSettings={(tab) => {
-                  setSettingsInitialTab(tab || 'terminal');
-                  setSettingsOpen(true);
-                }}
+                onOpenSettings={(tab) => openSettingsTab(tab || 'terminal')}
               />
-            </div>
+              </div>
+            </>
           )}
         </div>
 
+        {/* Resize handle for Chat */}
+        <div
+          className="w-px bg-border hover:bg-accent cursor-col-resize transition-colors shrink-0"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startWidth = chatWidth;
+            const handleMouseMove = (e: MouseEvent) => {
+              const newWidth = Math.max(300, Math.min(800, startWidth - (e.clientX - startX)));
+              setChatWidth(newWidth);
+            };
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+        />
+
         {/* Right: Chat Sidebar - Full height */}
-        <div className="shrink-0 flex flex-col border-l border-border" style={{ width: 420 }}>
+        <div className="shrink-0 flex flex-col" style={{ width: chatWidth }}>
           <ChatView
             messages={branchTree?.branches ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
             onSendMessage={(content) => {
@@ -757,6 +969,9 @@ function App() {
             onToggleContextFile={handleToggleContextFile}
             onRemoveContextFile={handleRemoveContextFile}
             onAttachManual={handleAttachManual}
+            onExportChat={handleExportChat}
+            onClearChat={clearMessages}
+            onOpenBranchManager={() => setBranchManagerOpen(true)}
           />
         </div>
       </div>
@@ -770,6 +985,7 @@ function App() {
           latency={latency}
           connectionQuality={connectionQuality}
           bandwidthMode={bandwidthMode}
+          batteryMode={batteryMode}
           isOnline={isOnline}
           reconnectAttempts={wsClient.getReconnectAttempts()}
           onManualReconnect={() => wsClient.manualReconnect()}
@@ -782,18 +998,9 @@ function App() {
           onOpenBranchManager={() => setBranchManagerOpen(true)}
           isStreaming={isStreaming}
           streamingStatus={streamingStatus}
+          editorInfo={editorInfo}
         />
       )}
-
-      {/* Settings Dialog */}
-      <SettingsDialog
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        settings={settings}
-        onSave={updateSettings}
-        onReset={resetSettings}
-        initialTab={settingsInitialTab}
-      />
 
       {/* About Dialog */}
       <AboutDialog
@@ -827,16 +1034,6 @@ function App() {
         onApproveAll={handleApproveAllChanges}
         onRejectAll={handleRejectAllChanges}
         onClose={() => setChangeApprovalOpen(false)}
-      />
-
-      {/* Favorites Sidebar */}
-      <FavoritesSidebar
-        isOpen={favoritesOpen}
-        onClose={() => setFavoritesOpen(false)}
-        onSelectConnection={(url, token) => {
-          updateSettings({ connectionUrl: url, authToken: token });
-          setFavoritesOpen(false);
-        }}
       />
 
       {/* Pairing Dialog */}
