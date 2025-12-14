@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Save, RotateCcw, CheckCircle, AlertCircle, Loader2,
   Plug, Terminal, Palette, MessageSquare, FileCode, Layout,
-  Zap, Shield, Sun, Moon, Monitor, Eye, EyeOff
+  Zap, Database, Sun, Moon, Monitor, Eye, EyeOff
 } from 'lucide-react';
 import { Settings, ChatMode, ModelInfo } from '../types';
 
@@ -38,7 +38,7 @@ const categories: CategoryConfig[] = [
   { id: 'appearance', label: 'Appearance', icon: <Palette size={18} /> },
   { id: 'layout', label: 'Layout', icon: <Layout size={18} /> },
   { id: 'system', label: 'System', icon: <Zap size={18} /> },
-  { id: 'privacy', label: 'Privacy', icon: <Shield size={18} /> },
+  { id: 'privacy', label: 'Data', icon: <Database size={18} /> },
 ];
 
 // Reusable form components
@@ -838,10 +838,10 @@ export function SettingsEditor({ settings, onSave, onReset, initialTab, availabl
               </div>
             )}
 
-            {/* Privacy Settings */}
+            {/* Data Settings */}
             {activeCategory === 'privacy' && (
               <div>
-                <SettingGroup title="Data">
+                <SettingGroup title="History">
                   <SettingRow label="Clear History on Exit" description="Delete chat history when closing app">
                     <Toggle
                       checked={localSettings.clearHistoryOnExit}

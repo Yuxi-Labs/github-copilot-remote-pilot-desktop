@@ -24,6 +24,7 @@ interface UseWebSocketReturn {
   currentStreamingId: string | null;
   connect: () => void;
   disconnect: () => void;
+  cancelConnection: () => void;
   sendMessage: (content: string, model?: string, includeContext?: boolean, mode?: ChatMode, editOptions?: {
     targetFile?: string;
     selection?: { startLine: number; endLine: number; text: string };
@@ -112,6 +113,14 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     setConnectionStatus('disconnected');
     setCurrentStreamingId(null);
     // Clear models on disconnect
+    onModelsReceived?.([]);
+  }, [onModelsReceived]);
+
+  const cancelConnection = useCallback(() => {
+    wsClient.cancelConnection();
+    setConnectionStatus('disconnected');
+    setCurrentStreamingId(null);
+    // Clear models on cancel
     onModelsReceived?.([]);
   }, [onModelsReceived]);
 
@@ -327,6 +336,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     currentStreamingId,
     connect,
     disconnect,
+    cancelConnection,
     sendMessage,
     cancelMessage,
     clearMessages,

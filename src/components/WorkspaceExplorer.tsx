@@ -6,9 +6,12 @@ import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface WorkspaceExplorerProps {
   isConnected: boolean;
+  connectionUrl?: string;
   onFileSelect?: (path: string, content: string) => void;
   onEditFile?: (path: string, content: string, language?: string, isPreview?: boolean) => void;
   onAttachFile?: (file: { name: string; path: string; content: string }) => void;
+  onNewFile?: (basePath: string) => void;
+  onNewFolder?: (basePath: string) => void;
 }
 
 interface ExplorerState {
@@ -16,6 +19,8 @@ interface ExplorerState {
   workspaceName: string;
   workspaceId: string;
   workspaceUri: string;
+  machineId: string;
+  machineName: string;
   loading: boolean;
   error: string | null;
   expandedDirs: Set<string>;
@@ -51,10 +56,13 @@ function getFileIcon(name: string) {
 }
 
 export function WorkspaceExplorer({ 
-  isConnected, 
+  isConnected,
+  connectionUrl,
   onFileSelect, 
   onEditFile,
-  onAttachFile 
+  onAttachFile,
+  onNewFile,
+  onNewFolder
 }: WorkspaceExplorerProps) {
   const { showContextMenu } = useContextMenu();
   const [state, setState] = useState<ExplorerState>({
@@ -62,6 +70,8 @@ export function WorkspaceExplorer({
     workspaceName: '',
     workspaceId: '',
     workspaceUri: '',
+    machineId: '',
+    machineName: '',
     loading: false,
     error: null,
     expandedDirs: new Set(),
@@ -88,6 +98,8 @@ export function WorkspaceExplorer({
               workspaceName: msg.payload.workspaceName || 'Workspace',
               workspaceId: msg.payload.workspaceId || '',
               workspaceUri: msg.payload.workspaceUri || '',
+              machineId: msg.payload.machineId || '',
+              machineName: msg.payload.machineName || '',
               loading: false,
             }));
           } else {
@@ -120,6 +132,8 @@ export function WorkspaceExplorer({
         workspaceName: '',
         workspaceId: '',
         workspaceUri: '',
+        machineId: '',
+        machineName: '',
         loading: false,
         error: null,
         expandedDirs: new Set(),
@@ -198,13 +212,13 @@ export function WorkspaceExplorer({
       items.push({ divider: true });
       items.push({
         label: 'New File...',
-        disabled: true, // TODO: Implement
-        action: () => {},
+        disabled: !onNewFile,
+        action: () => onNewFile?.(entry.path),
       });
       items.push({
         label: 'New Folder...',
-        disabled: true, // TODO: Implement
-        action: () => {},
+        disabled: !onNewFolder,
+        action: () => onNewFolder?.(entry.path),
       });
       items.push({ divider: true });
       items.push({
@@ -294,7 +308,7 @@ export function WorkspaceExplorer({
   // Not connected state
   if (!isConnected) {
     return (
-      <div className="h-full flex flex-col bg-bg-secondary border-r border-border">
+      <div className="h-full flex flex-col bg-bg-secondary">
         <div className="px-3 py-2 border-b border-border">
           <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide">Explorer</h3>
         </div>
@@ -308,7 +322,7 @@ export function WorkspaceExplorer({
   }
 
   return (
-    <div className="h-full flex flex-col bg-bg-secondary border-r border-border">
+    <div className="h-full flex flex-col bg-bg-secondary">
       {/* Header */}
       <div className="px-3 border-b border-border flex items-center" style={{ height: '32px' }}>
         <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
@@ -321,15 +335,17 @@ export function WorkspaceExplorer({
         {/* Toolbar */}
         <div className="px-2 flex items-center gap-0.5" style={{ height: '32px' }}>
         <button
-          onClick={() => {/* TODO: Create file */}}
-          className="p-1 hover:bg-bg-hover rounded transition-colors"
+          onClick={() => onNewFile?.('')}
+          disabled={!onNewFile}
+          className="p-1 hover:bg-bg-hover rounded transition-colors disabled:opacity-50"
           title="New File"
         >
           <FilePlus size={14} className="text-text-secondary" />
         </button>
         <button
-          onClick={() => {/* TODO: Create folder */}}
-          className="p-1 hover:bg-bg-hover rounded transition-colors"
+          onClick={() => onNewFolder?.('')}
+          disabled={!onNewFolder}
+          className="p-1 hover:bg-bg-hover rounded transition-colors disabled:opacity-50"
           title="New Folder"
         >
           <FolderPlus size={14} className="text-text-secondary" />
@@ -384,9 +400,9 @@ export function WorkspaceExplorer({
           <>
             {/* Workspace Root */}
             <div className="px-2 py-1">
-              <div className="flex items-center gap-1.5 text-xs text-text-primary font-medium" title={state.workspaceUri}>
+              <div className="flex items-center gap-1.5 text-xs text-text-primary font-medium" title={`Machine ID: ${state.machineId}\nWorkspace: ${state.workspaceUri}`}>
                 <Monitor size={14} className="text-accent" />
-                <span>{state.workspaceName || 'Workspace'}</span>
+                <span>{state.machineName || state.machineId || 'VS Code'}</span>
               </div>
             </div>
             {/* Entries */}

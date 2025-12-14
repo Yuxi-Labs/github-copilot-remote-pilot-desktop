@@ -171,6 +171,8 @@ export interface ControllerMessage {
     workspaceName?: string;
     workspaceId?: string;
     workspaceUri?: string;
+    machineId?: string;
+    machineName?: string;
     // FileContent payload
     fileName?: string;
     language?: string;

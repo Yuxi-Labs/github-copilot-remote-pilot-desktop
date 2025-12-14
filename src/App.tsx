@@ -45,6 +45,7 @@ import { SessionManagementDialog } from './components/SessionManagementDialog';
 import { BranchManager } from './components/BranchManager';
 import { ChangeApprovalDialog } from './components/ChangeApprovalDialog';
 import { ErrorNotification, ErrorDetails } from './components/ErrorNotification';
+import { NewItemDialog } from './components/NewItemDialog';
 import { type ModelInfo, type ModeInfo, type ChatMode, type ContextFile } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
@@ -105,6 +106,11 @@ function App() {
   } | null>(null);
   const [openTabs, setOpenTabs] = useState<{ path: string; name: string; isPreview: boolean; content: string; language?: string }[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [newItemDialog, setNewItemDialog] = useState<{
+    isOpen: boolean;
+    type: 'file' | 'folder';
+    basePath: string;
+  }>({ isOpen: false, type: 'file', basePath: '' });
 
   const handleModelsReceived = useCallback((models: ModelInfo[]) => {
     logger.log('Models received in App:', models);
@@ -155,6 +161,7 @@ function App() {
     sendMessage,
     cancelMessage,
     clearMessages,
+    cancelConnection,
     approveChange: wsApproveChange,
     rejectChange: wsRejectChange,
   } = useWebSocket({
@@ -167,6 +174,7 @@ function App() {
   });
 
   const isConnected = connectionStatus === 'connected';
+  const isConnecting = connectionStatus === 'connecting';
   const isStreaming = currentStreamingId !== null;
 
   // Auto-save connection to favorites on successful connect
@@ -480,18 +488,45 @@ function App() {
   }, []);
 
   const handleAttachManual = useCallback(() => {
-    // TODO: Open file picker dialog
-    logger.log('Manual file attach requested');
+    // For manual file attach, we browse from the workspace root
+    // This could open a file picker in the explorer, but for now we just focus the explorer
+    logger.log('Manual file attach - use Explorer to select files');
   }, []);
 
-  const handleAttachFileToContext = useCallback((file: { name: string; content: string }) => {
+  const handleCreateNewItem = useCallback((name: string, type: 'file' | 'folder') => {
+    const basePath = newItemDialog.basePath;
+    const fullPath = basePath ? `${basePath}/${name}` : name;
+    
+    if (type === 'file') {
+      // Create empty file
+      wsClient.writeFile(fullPath, '', true);
+      // Open in editor
+      const fileName = name;
+      setOpenTabs(prev => [...prev, { path: fullPath, name: fileName, isPreview: false, content: '', language: undefined }]);
+      setActiveTab(fullPath);
+      setEditorState({
+        isOpen: true,
+        filePath: fullPath,
+        content: '',
+        language: undefined,
+      });
+    } else {
+      // Create folder by creating a placeholder file and then deleting it? 
+      // Or we just create an empty .gitkeep file in the folder
+      wsClient.writeFile(`${fullPath}/.gitkeep`, '', true);
+    }
+    
+    logger.log(`Created ${type}: ${fullPath}`);
+  }, [newItemDialog.basePath]);
+
+  const handleAttachFileToContext = useCallback((file: { name: string; content: string; path?: string }) => {
     // Add file to context if not already present
     const exists = contextFiles.some(f => f.name === file.name);
     if (!exists) {
       const newContextFile: ContextFile = {
         id: uuidv4(),
         name: file.name,
-        path: file.name, // TODO: Get actual path if available
+        path: file.path || file.name,
         content: file.content,
         enabled: true,
         isAuto: false,
@@ -499,6 +534,7 @@ function App() {
       setContextFiles(prev => [...prev, newContextFile]);
     }
   }, [contextFiles]);
+
 
   const handleRetry = useCallback((_messageId: string, content: string) => {
     // Resend the message with context from the original message
@@ -636,10 +672,10 @@ function App() {
         onConnect={handleConnect}
         onDisconnect={disconnect}
         onNewFile={() => {
-          // TODO: Implement new file creation
+          setNewItemDialog({ isOpen: true, type: 'file', basePath: '' });
         }}
         onNewFolder={() => {
-          // TODO: Implement new folder creation
+          setNewItemDialog({ isOpen: true, type: 'folder', basePath: '' });
         }}
         onSave={() => {
           // Save current file via AI
@@ -648,7 +684,11 @@ function App() {
           }
         }}
         onSaveAs={() => {
-          // TODO: Implement save as
+          // Save As opens the new file dialog with current content
+          if (editorState.isOpen && editorState.filePath) {
+            const basePath = editorState.filePath.split('/').slice(0, -1).join('/');
+            setNewItemDialog({ isOpen: true, type: 'file', basePath });
+          }
         }}
         onSaveAll={() => {
           // Save all modified tabs via AI
@@ -697,9 +737,10 @@ function App() {
       {/* Main Content Area - Three Column Layout */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Left: Workspace Explorer - Full height */}
-        <div className="shrink-0 flex flex-col" style={{ width: explorerWidth }}>
+        <div className="shrink-0 flex flex-col border-r border-border" style={{ width: explorerWidth }}>
           <WorkspaceExplorer
             isConnected={isConnected}
+            connectionUrl={settings.connectionUrl}
             onAttachFile={(file) => {
               // Explicitly attach file to chat context (called from context menu)
               const exists = contextFiles.some(f => f.name === file.name);
@@ -707,7 +748,7 @@ function App() {
                 const newContextFile: ContextFile = {
                   id: uuidv4(),
                   name: file.name,
-                  path: file.name,
+                  path: file.path || file.name,
                   content: file.content,
                   enabled: true,
                   isAuto: false, // Explicitly attached from context menu
@@ -737,12 +778,15 @@ function App() {
                 language,
               });
             }}
+            onNewFile={(basePath) => setNewItemDialog({ isOpen: true, type: 'file', basePath })}
+            onNewFolder={(basePath) => setNewItemDialog({ isOpen: true, type: 'folder', basePath })}
           />
         </div>
 
         {/* Resize handle for Explorer */}
         <div
-          className="w-px bg-border hover:bg-accent cursor-col-resize transition-colors shrink-0"
+          className="relative shrink-0 group cursor-col-resize"
+          style={{ width: '8px', marginLeft: '-4px', marginRight: '-4px' }}
           onMouseDown={(e) => {
             e.preventDefault();
             const startX = e.clientX;
@@ -758,7 +802,10 @@ function App() {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
           }}
-        />
+        >
+          {/* Hover indicator */}
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 opacity-0 group-hover:opacity-100 bg-accent transition-opacity" />
+        </div>
 
         {/* Center: Editor area + Terminal (stacked) */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -857,7 +904,8 @@ function App() {
             <>
               {/* Resize handle for Terminal */}
               <div
-                className="h-px bg-border hover:bg-accent cursor-row-resize transition-colors shrink-0"
+                className="relative shrink-0 group cursor-row-resize"
+                style={{ height: '8px', marginTop: '-4px', marginBottom: '-4px' }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   const startY = e.clientY;
@@ -873,9 +921,12 @@ function App() {
                   document.addEventListener('mousemove', handleMouseMove);
                   document.addEventListener('mouseup', handleMouseUp);
                 }}
-              />
+              >
+                {/* Hover indicator */}
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 opacity-0 group-hover:opacity-100 bg-accent transition-opacity" />
+              </div>
               <div 
-                className="shrink-0" 
+                className="shrink-0 border-t border-border" 
                 style={{ height: terminalMaximized ? '100%' : terminalHeight }}
               >
               <Terminal
@@ -892,7 +943,8 @@ function App() {
 
         {/* Resize handle for Chat */}
         <div
-          className="w-px bg-border hover:bg-accent cursor-col-resize transition-colors shrink-0"
+          className="relative shrink-0 group cursor-col-resize"
+          style={{ width: '8px', marginLeft: '-4px', marginRight: '-4px' }}
           onMouseDown={(e) => {
             e.preventDefault();
             const startX = e.clientX;
@@ -908,10 +960,13 @@ function App() {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
           }}
-        />
+        >
+          {/* Hover indicator */}
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 opacity-0 group-hover:opacity-100 bg-accent transition-opacity" />
+        </div>
 
         {/* Right: Chat Sidebar - Full height */}
-        <div className="shrink-0 flex flex-col" style={{ width: chatWidth }}>
+        <div className="shrink-0 flex flex-col border-l border-border" style={{ width: chatWidth }}>
           <ChatView
             messages={branchTree?.branches ? (branchTree.branches.get(branchTree.activeBranchId)?.messages || messages) : messages}
             onSendMessage={(content) => {
@@ -989,6 +1044,7 @@ function App() {
           isOnline={isOnline}
           reconnectAttempts={wsClient.getReconnectAttempts()}
           onManualReconnect={() => wsClient.manualReconnect()}
+          onCancelConnection={cancelConnection}
           selectedMode={selectedMode}
           selectedModel={availableModels.find(m => m.id === selectedModel)?.name}
           pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
@@ -1054,6 +1110,15 @@ function App() {
           setPairingError(undefined);
           // Retry pairing logic would go here
         }}
+      />
+
+      {/* New File/Folder Dialog */}
+      <NewItemDialog
+        isOpen={newItemDialog.isOpen}
+        type={newItemDialog.type}
+        basePath={newItemDialog.basePath}
+        onConfirm={handleCreateNewItem}
+        onClose={() => setNewItemDialog(prev => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

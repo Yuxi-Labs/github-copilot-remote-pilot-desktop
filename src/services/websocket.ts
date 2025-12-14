@@ -23,12 +23,14 @@ export class WebSocketClient {
   private handlers: WebSocketEventHandler = {};
   private messageHandlers: Set<MessageHandler> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectionTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private autoReconnect: boolean = true;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 10;
   private baseReconnectDelay: number = 1000;
   private maxReconnectDelay: number = 30000;
+  private connectionTimeoutMs: number = 10000; // 10 second connection timeout
   private isAuthenticated: boolean = false;
   private isConnecting: boolean = false;
   private lastPingTime: number = 0;
@@ -94,7 +96,23 @@ export class WebSocketClient {
       logger.log('Creating new WebSocket connection to:', url);
       this.ws = new WebSocket(url);
 
+      // Set connection timeout
+      this.connectionTimeout = setTimeout(() => {
+        if (this.isConnecting) {
+          logger.log('Connection timeout - aborting connection attempt');
+          this.isConnecting = false;
+          this.ws?.close(1000, 'Connection timeout');
+          this.ws = null;
+          this.handlers.onError?.(new Event('connection_timeout'));
+        }
+      }, this.connectionTimeoutMs);
+
       this.ws.onopen = () => {
+        // Clear connection timeout
+        if (this.connectionTimeout) {
+          clearTimeout(this.connectionTimeout);
+          this.connectionTimeout = null;
+        }
         logger.log('WebSocket connected to:', url);
         this.reconnectAttempts = 0; // Reset on successful connection
         this.sendAuth();
@@ -119,6 +137,11 @@ export class WebSocketClient {
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // Clear connection timeout
+        if (this.connectionTimeout) {
+          clearTimeout(this.connectionTimeout);
+          this.connectionTimeout = null;
+        }
         this.isConnecting = false;
         this.handlers.onError?.(error);
       };
@@ -150,9 +173,35 @@ export class WebSocketClient {
   disconnect(): void {
     this.autoReconnect = false;
     this.reconnectAttempts = 0;
+    this.isConnecting = false;
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
     this.cleanup();
     this.ws?.close(1000, 'User disconnected');
     this.ws = null;
+  }
+
+  /**
+   * Cancel an ongoing connection attempt
+   */
+  cancelConnection(): void {
+    logger.log('Cancelling connection attempt...');
+    this.autoReconnect = false;
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+    this.cleanup();
+    if (this.ws) {
+      this.ws.close(1000, 'Connection cancelled');
+      this.ws = null;
+    }
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, MessageCircle, RefreshCw, Signal, SignalHigh, SignalLow, SignalMedium, Zap, CloudOff, GitBranch, AlertCircle, CheckCircle2, Activity } from 'lucide-react';
+import { Wifi, WifiOff, MessageCircle, RefreshCw, Signal, SignalHigh, SignalLow, SignalMedium, Zap, CloudOff, GitBranch, AlertCircle, CheckCircle2, Activity, XCircle } from 'lucide-react';
 import { ConnectionStatus, ChatMode } from '../types';
 
 interface StatusBarProps {
@@ -12,6 +12,7 @@ interface StatusBarProps {
   isOnline?: boolean;
   reconnectAttempts?: number;
   onManualReconnect?: () => void;
+  onCancelConnection?: () => void;
   // New props for richer status
   selectedMode?: ChatMode;
   selectedModel?: string;
@@ -41,6 +42,7 @@ export function StatusBar({
   isOnline = true,
   reconnectAttempts = 0,
   onManualReconnect,
+  onCancelConnection,
   selectedMode,
   selectedModel,
   pendingChangesCount = 0,
@@ -52,6 +54,7 @@ export function StatusBar({
   editorInfo,
 }: StatusBarProps) {
   const isConnected = connectionStatus === 'connected';
+  const isConnecting = connectionStatus === 'connecting';
 
   const statusConfig = {
     connected: { color: 'text-success', bg: 'bg-success', label: 'Connected' },
@@ -87,6 +90,17 @@ export function StatusBar({
           <span className={`w-2 h-2 rounded-full ${statusBg} ${connectionStatus === 'connecting' ? 'animate-pulse' : ''}`} />
           {isConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
           <span>{reconnectAttempts > 0 && connectionStatus === 'connecting' ? `Reconnecting (${reconnectAttempts})...` : statusLabel}</span>
+          {/* Cancel button when connecting */}
+          {isConnecting && onCancelConnection && (
+            <button
+              onClick={onCancelConnection}
+              className="flex items-center gap-1 px-1 py-0.5 ml-1 text-error hover:bg-error/10 transition-colors"
+              title="Cancel connection"
+            >
+              <XCircle size={10} />
+              <span>Cancel</span>
+            </button>
+          )}
         </div>
 
         {/* Offline indicator */}
