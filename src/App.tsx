@@ -21,16 +21,6 @@ import {
   deleteBranch, 
   renameBranch 
 } from './utils/conversationBranching';
-import { 
-  loadPendingChanges, 
-  savePendingChanges, 
-  approveChange, 
-  rejectChange, 
-  approveAllChanges, 
-  rejectAllChanges, 
-  removeChangeGroup 
-} from './utils/changeTracking';
-import { ChangeGroup } from './types/changes';
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { StatusBar } from './components/StatusBar';
@@ -43,10 +33,9 @@ import { Terminal } from './components/Terminal';
 import { PairingDialog } from './components/PairingDialog';
 import { SessionManagementDialog } from './components/SessionManagementDialog';
 import { BranchManager } from './components/BranchManager';
-import { ChangeApprovalDialog } from './components/ChangeApprovalDialog';
 import { ErrorNotification, ErrorDetails } from './components/ErrorNotification';
 import { NewItemDialog } from './components/NewItemDialog';
-import { type ModelInfo, type ModeInfo, type ChatMode, type ContextFile } from './types';
+import { type ModelInfo, type ModeInfo, type ChatMode, type ContextFile, type FileSyncEvent } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
@@ -76,8 +65,6 @@ function App() {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [branchManagerOpen, setBranchManagerOpen] = useState(false);
   const [branchTree, setBranchTree] = useState<BranchTree | null>(null);
-  const [changeApprovalOpen, setChangeApprovalOpen] = useState(false);
-  const [pendingChangeGroups, setPendingChangeGroups] = useState<ChangeGroup[]>([]);
   const [pairingStatus, setPairingStatus] = useState<'requesting' | 'pending' | 'approved' | 'rejected' | 'error'>('requesting');
   const [pairingId, setPairingId] = useState<string>();
   const [pairingError, setPairingError] = useState<string>();
@@ -127,30 +114,64 @@ function App() {
           logger.log('Keeping current model:', current);
           return current;
         }
+        // Check if saved model from settings exists in new models
+        if (settings.model && models.some(m => m.id === settings.model)) {
+          logger.log('Selecting model from settings:', settings.model);
+          return settings.model;
+        }
         // Otherwise select default or first model
         const defaultModel = models.find(m => m.isDefault) || models[0];
         logger.log('Auto-selecting model:', defaultModel.id);
         return defaultModel.id;
       });
     }
-  }, []);
+  }, [settings.model]);
 
-  const handlePendingChange = useCallback((group: ChangeGroup) => {
-    setPendingChangeGroups(prev => {
-      // Check if group already exists
-      const existing = prev.find(g => g.id === group.id);
-      if (existing) {
-        return prev.map(g => g.id === group.id ? group : g);
-      }
-      return [...prev, group];
-    });
-    savePendingChanges([...pendingChangeGroups, group]);
+  // Ref to trigger workspace refresh
+  const [workspaceRefreshTrigger, setWorkspaceRefreshTrigger] = useState(0);
+
+  // Handle file sync events from VS Code
+  const handleFileSync = useCallback((event: FileSyncEvent) => {
+    logger.log(`File ${event.changeType}: ${event.path}`);
     
-    // Auto-open change approval dialog if not already open
-    if (!changeApprovalOpen) {
-      setChangeApprovalOpen(true);
+    // Trigger workspace refresh for file creation/deletion
+    if (event.changeType === 'created' || event.changeType === 'deleted') {
+      setWorkspaceRefreshTrigger(prev => prev + 1);
     }
-  }, [pendingChangeGroups, changeApprovalOpen]);
+    
+    // Update the currently open editor if the same file was changed
+    if (editorState.isOpen && editorState.filePath === event.path) {
+      if (event.changeType === 'deleted') {
+        // Close editor if file was deleted
+        setEditorState({ isOpen: false, filePath: '', content: '' });
+        setOpenTabs(prev => prev.filter(tab => tab.path !== event.path));
+        if (activeTab === event.path) {
+          setActiveTab(null);
+        }
+      } else if (event.content !== undefined) {
+        // Update content if provided
+        setEditorState(prev => ({
+          ...prev,
+          content: event.content!,
+          language: event.language || prev.language,
+        }));
+      }
+    }
+    
+    // Update open tabs if the file content changed
+    if (event.changeType !== 'deleted' && event.content !== undefined) {
+      setOpenTabs(prev => prev.map(tab => 
+        tab.path === event.path 
+          ? { ...tab, content: event.content!, language: event.language || tab.language }
+          : tab
+      ));
+    } else if (event.changeType === 'deleted') {
+      setOpenTabs(prev => prev.filter(tab => tab.path !== event.path));
+      if (activeTab === event.path) {
+        setActiveTab(null);
+      }
+    }
+  }, [editorState.isOpen, editorState.filePath, activeTab]);
 
   const {
     connectionStatus,
@@ -164,18 +185,27 @@ function App() {
     cancelConnection,
     approveChange: wsApproveChange,
     rejectChange: wsRejectChange,
+    approveAllChangesInMessage,
+    rejectAllChangesInMessage,
   } = useWebSocket({
     url: settings.connectionUrl,
     token: settings.authToken,
     autoReconnect: settings.autoReconnect,
     onError: setError,
     onModelsReceived: handleModelsReceived,
-    onPendingChange: handlePendingChange,
+    onFileSync: handleFileSync,
   });
 
   const isConnected = connectionStatus === 'connected';
   const isConnecting = connectionStatus === 'connecting';
   const isStreaming = currentStreamingId !== null;
+
+  // Clear connection errors when successfully connected
+  useEffect(() => {
+    if (isConnected) {
+      setError(null);
+    }
+  }, [isConnected]);
 
   // Auto-save connection to favorites on successful connect
   useEffect(() => {
@@ -197,12 +227,6 @@ function App() {
       }
     };
     initBranches();
-  }, []);
-
-  // Load pending changes on mount
-  useEffect(() => {
-    const groups = loadPendingChanges();
-    setPendingChangeGroups(groups);
   }, []);
 
   // Update active branch messages when messages change
@@ -290,11 +314,6 @@ function App() {
         e.preventDefault();
         setBranchManagerOpen(!branchManagerOpen);
       }
-      // Ctrl+Shift+C: Toggle Change Approval
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        setChangeApprovalOpen(!changeApprovalOpen);
-      }
       // Escape: Cancel current request or close dialogs
       if (e.key === 'Escape') {
         if (currentStreamingId) {
@@ -307,8 +326,6 @@ function App() {
           setSessionsOpen(false);
         } else if (branchManagerOpen) {
           setBranchManagerOpen(false);
-        } else if (changeApprovalOpen) {
-          setChangeApprovalOpen(false);
         }
       }
     };
@@ -407,38 +424,6 @@ function App() {
     setBranchTree(newTree);
     saveBranchTree(newTree);
   }, [branchTree]);
-
-  const handleApproveChange = useCallback((groupId: string, changeId: string) => {
-    approveChange(groupId, changeId);
-    wsApproveChange(changeId);
-    setPendingChangeGroups(loadPendingChanges());
-  }, [wsApproveChange]);
-
-  const handleRejectChange = useCallback((groupId: string, changeId: string) => {
-    rejectChange(groupId, changeId);
-    wsRejectChange(changeId);
-    setPendingChangeGroups(loadPendingChanges());
-  }, [wsRejectChange]);
-
-  const handleApproveAllChanges = useCallback((groupId: string) => {
-    approveAllChanges(groupId);
-    const groups = loadPendingChanges();
-    const group = groups.find(g => g.id === groupId);
-    if (group) {
-      group.changes.forEach(change => wsApproveChange(change.id));
-    }
-    setPendingChangeGroups(loadPendingChanges());
-  }, [wsApproveChange]);
-
-  const handleRejectAllChanges = useCallback((groupId: string) => {
-    rejectAllChanges(groupId);
-    const groups = loadPendingChanges();
-    const group = groups.find(g => g.id === groupId);
-    if (group) {
-      group.changes.forEach(change => wsRejectChange(change.id));
-    }
-    setPendingChangeGroups(loadPendingChanges());
-  }, [wsRejectChange]);
 
   const handlePaste = useCallback(async () => {
     // Paste is handled natively by the textarea
@@ -653,10 +638,22 @@ function App() {
 
   // Handle context menu for generic areas
   const handleAppContextMenu = useCallback((e: React.MouseEvent) => {
-    // Only show generic menu if the event didn't bubble up from a more specific handler
-    if ((e.target as HTMLElement).closest('[data-context-menu]')) {
-      return; // Let the specific context menu handler handle it
+    // Check if the click came from an element that handles its own context menu
+    const target = e.target as HTMLElement;
+    
+    // Don't show app menu if:
+    // 1. Target or ancestor has data-context-menu (handles its own menu)
+    // 2. Target is in WorkspaceExplorer, MessageList, or other specific components
+    if (
+      target.closest('[data-context-menu]') ||
+      target.closest('.workspace-explorer') ||
+      target.closest('.message-list') ||
+      target.closest('.file-editor') ||
+      target.closest('.terminal')
+    ) {
+      return; // Let the specific handler manage it
     }
+    
     e.preventDefault();
     showContextMenu(e, buildGenericContextMenu());
   }, [showContextMenu, buildGenericContextMenu]);
@@ -728,9 +725,7 @@ function App() {
         onDisconnect={disconnect}
         onOpenTerminal={() => setTerminalOpen(true)}
         onOpenBranchManager={() => setBranchManagerOpen(true)}
-        onOpenPendingChanges={() => setChangeApprovalOpen(true)}
-        pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
-          count + group.changes.filter(c => c.status === 'pending').length, 0)}
+        pendingChangesCount={0}
         hasMessages={messages.length > 0}
       />
 
@@ -741,6 +736,7 @@ function App() {
           <WorkspaceExplorer
             isConnected={isConnected}
             connectionUrl={settings.connectionUrl}
+            refreshTrigger={workspaceRefreshTrigger}
             onAttachFile={(file) => {
               // Explicitly attach file to chat context (called from context menu)
               const exists = contextFiles.some(f => f.name === file.name);
@@ -1027,6 +1023,10 @@ function App() {
             onExportChat={handleExportChat}
             onClearChat={clearMessages}
             onOpenBranchManager={() => setBranchManagerOpen(true)}
+            onApproveChange={wsApproveChange}
+            onRejectChange={wsRejectChange}
+            onApproveAllChanges={approveAllChangesInMessage}
+            onRejectAllChanges={rejectAllChangesInMessage}
           />
         </div>
       </div>
@@ -1047,9 +1047,7 @@ function App() {
           onCancelConnection={cancelConnection}
           selectedMode={selectedMode}
           selectedModel={availableModels.find(m => m.id === selectedModel)?.name}
-          pendingChangesCount={pendingChangeGroups.reduce((count, group) => 
-            count + group.changes.filter(c => c.status === 'pending').length, 0)}
-          onOpenPendingChanges={() => setChangeApprovalOpen(true)}
+          pendingChangesCount={0}
           activeBranch={branchTree?.branches?.get(branchTree.activeBranchId)?.name}
           onOpenBranchManager={() => setBranchManagerOpen(true)}
           isStreaming={isStreaming}
@@ -1081,16 +1079,6 @@ function App() {
           onClose={() => setBranchManagerOpen(false)}
         />
       )}
-
-      {/* Change Approval Dialog */}
-      <ChangeApprovalDialog
-        groups={pendingChangeGroups}
-        onApprove={handleApproveChange}
-        onReject={handleRejectChange}
-        onApproveAll={handleApproveAllChanges}
-        onRejectAll={handleRejectAllChanges}
-        onClose={() => setChangeApprovalOpen(false)}
-      />
 
       {/* Pairing Dialog */}
       <PairingDialog

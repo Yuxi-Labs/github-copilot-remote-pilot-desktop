@@ -34,6 +34,7 @@ export interface Message {
   errorMessage?: string;
   retryCount?: number;
   toolCalls?: ToolCall[];
+  pendingChanges?: PendingChange[];  // File changes awaiting approval
 }
 
 // Tool call for agent mode feedback
@@ -56,6 +57,16 @@ export interface PendingChange {
   deletions: number;
   timestamp: number;
   status: 'pending' | 'approved' | 'rejected';
+}
+
+// File sync event from VS Code
+export interface FileSyncEvent {
+  path: string;
+  changeType: 'changed' | 'created' | 'deleted';
+  timestamp: number;
+  content?: string;       // New content (for changed/created, optional based on size)
+  language?: string;      // Language ID
+  size?: number;          // File size in bytes
 }
 
 // Auth message (special format - token at root level)
@@ -136,7 +147,7 @@ export interface WorkspaceContext {
 // Controller → Client messages
 export interface ControllerMessage {
   id: string;
-  type: 'authRequired' | 'authSuccess' | 'pairPending' | 'pairApproved' | 'pairRejected' | 'chunk' | 'done' | 'error' | 'toolCall' | 'pendingChange' | 'changeApproved' | 'changeRejected' | 'pong' | 'status' | 'models' | 'context' | 'files' | 'fileContent' | 'writeResult' | 'editResult' | 'openResult' | 'terminalOutput' | 'terminalExit';
+  type: 'authRequired' | 'authSuccess' | 'pairPending' | 'pairApproved' | 'pairRejected' | 'chunk' | 'done' | 'error' | 'toolCall' | 'pendingChange' | 'changeApproved' | 'changeRejected' | 'fileChanged' | 'fileCreated' | 'fileDeleted' | 'pong' | 'status' | 'models' | 'context' | 'files' | 'fileContent' | 'writeResult' | 'editResult' | 'openResult' | 'terminalOutput' | 'terminalExit';
   payload: {
     // Pairing responses
     pairingId?: string;
@@ -147,7 +158,7 @@ export interface ControllerMessage {
     
     // Pending change payload
     changeId?: string;
-    changeType?: 'edit' | 'write';
+    changeType?: 'edit' | 'write' | 'changed' | 'created' | 'deleted';
     path?: string;
     diff?: string;
     additions?: number;

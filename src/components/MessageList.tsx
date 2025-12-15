@@ -9,9 +9,23 @@ interface MessageListProps {
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
   onBranch?: (messageIndex: number) => void;
+  onApproveChange?: (changeId: string) => void;
+  onRejectChange?: (changeId: string) => void;
+  onApproveAllChanges?: (messageId: string) => void;
+  onRejectAllChanges?: (messageId: string) => void;
 }
 
-export function MessageList({ messages, onNewChat, onRetry, onRegenerate, onBranch }: MessageListProps) {
+export function MessageList({ 
+  messages, 
+  onNewChat, 
+  onRetry, 
+  onRegenerate, 
+  onBranch,
+  onApproveChange,
+  onRejectChange,
+  onApproveAllChanges,
+  onRejectAllChanges,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -30,7 +44,7 @@ export function MessageList({ messages, onNewChat, onRetry, onRegenerate, onBran
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
+    <div className="message-list flex-1 overflow-y-auto p-4">
       {messages.map((message, index) => (
         <Message 
           key={message.id} 
@@ -39,6 +53,10 @@ export function MessageList({ messages, onNewChat, onRetry, onRegenerate, onBran
           onRetry={onRetry}
           onRegenerate={onRegenerate}
           onBranch={onBranch}
+          onApproveChange={onApproveChange}
+          onRejectChange={onRejectChange}
+          onApproveAllChanges={onApproveAllChanges}
+          onRejectAllChanges={onRejectAllChanges}
         />
       ))}
       <div ref={bottomRef} />

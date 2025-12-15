@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message as MessageType } from '../types';
 import { ToolCallCard } from './ToolCallCard';
+import { PendingChangesCard } from './PendingChangesCard';
 import { useContextMenu, ContextMenuItem } from './ContextMenu';
 
 interface MessageProps {
@@ -14,9 +15,23 @@ interface MessageProps {
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
   onBranch?: (messageIndex: number) => void;
+  onApproveChange?: (changeId: string) => void;
+  onRejectChange?: (changeId: string) => void;
+  onApproveAllChanges?: (messageId: string) => void;
+  onRejectAllChanges?: (messageId: string) => void;
 }
 
-export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch }: MessageProps) {
+export function Message({ 
+  message, 
+  messageIndex, 
+  onRetry, 
+  onRegenerate, 
+  onBranch,
+  onApproveChange,
+  onRejectChange,
+  onApproveAllChanges,
+  onRejectAllChanges,
+}: MessageProps) {
   const [copied, setCopied] = useState(false);
   const { showContextMenu } = useContextMenu();
   const isUser = message.role === 'user';
@@ -177,6 +192,17 @@ export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch
           </div>
         )}
 
+        {/* Pending file changes */}
+        {message.pendingChanges && message.pendingChanges.length > 0 && (
+          <PendingChangesCard
+            changes={message.pendingChanges}
+            onApprove={(changeId) => onApproveChange?.(changeId)}
+            onReject={(changeId) => onRejectChange?.(changeId)}
+            onApproveAll={() => onApproveAllChanges?.(message.id)}
+            onRejectAll={() => onRejectAllChanges?.(message.id)}
+          />
+        )}
+
         {/* Error indicator and retry button */}
         {message.hasError && (
           <div className="mt-3 flex items-start gap-2 p-2 bg-error/10 border border-error/30">
@@ -185,6 +211,17 @@ export function Message({ message, messageIndex, onRetry, onRegenerate, onBranch
               <div className="text-xs text-error font-medium mb-1">Message failed</div>
               {message.errorMessage && (
                 <div className="text-xs text-error/80 mb-2">{message.errorMessage}</div>
+              )}
+              {/* Helpful hints based on common errors */}
+              {message.errorMessage?.includes('No Copilot models') && (
+                <div className="text-xs text-warning/90 bg-warning/10 p-2 mb-2 border border-warning/30">
+                  💡 Make sure GitHub Copilot is installed and you're signed in to VS Code.
+                </div>
+              )}
+              {message.errorMessage?.includes('not found') && message.errorMessage?.includes('Model') && (
+                <div className="text-xs text-warning/90 bg-warning/10 p-2 mb-2 border border-warning/30">
+                  💡 The selected model is not available. Try selecting a different model from the model picker.
+                </div>
               )}
               {message.retryCount !== undefined && message.retryCount > 0 && (
                 <div className="text-xs text-error/70 mb-2">

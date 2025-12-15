@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { wsClient } from '../services/websocket';
-import { ConnectionStatus, ControllerMessage, Message, ModelInfo, ChatMode } from '../types';
-import { FileChange, ChangeGroup } from '../types/changes';
-import { createFileChange, createChangeGroup } from '../utils/changeTracking';
+import { ConnectionStatus, ControllerMessage, Message, ModelInfo, ChatMode, FileSyncEvent, PendingChange } from '../types';
+import { ChangeGroup } from '../types/changes';
 import { generateUUID } from '../utils/uuid';
 import { saveChatHistory, loadChatHistory } from '../utils/chatHistory';
 import { ErrorDetails } from '../components/ErrorNotification';
@@ -15,7 +14,7 @@ interface UseWebSocketOptions {
   reconnectInterval?: number;
   onError?: (error: ErrorDetails | string) => void;
   onModelsReceived?: (models: ModelInfo[]) => void;
-  onPendingChange?: (group: ChangeGroup) => void;
+  onFileSync?: (event: FileSyncEvent) => void;
 }
 
 interface UseWebSocketReturn {
@@ -34,10 +33,12 @@ interface UseWebSocketReturn {
   requestModels: () => void;
   approveChange: (changeId: string) => void;
   rejectChange: (changeId: string) => void;
+  approveAllChangesInMessage: (messageId: string) => void;
+  rejectAllChangesInMessage: (messageId: string) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived, onPendingChange } = options;
+  const { url, token, autoReconnect = true, reconnectInterval = 5000, onError, onModelsReceived, onFileSync } = options;
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -229,23 +230,44 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         break;
 
       case 'pendingChange':
-        // Handle pending file changes from controller
+        // Handle pending file changes - attach directly to the message that triggered them
         if (message.payload.changeId && message.payload.path) {
-          const change = createFileChange(
-            message.payload.changeType || 'edit',
-            message.payload.path,
-            undefined, // oldContent not provided in protocol yet
-            message.payload.diff
+          const pendingChange: PendingChange = {
+            id: message.payload.changeId,
+            type: message.payload.changeType || 'edit',
+            path: message.payload.path,
+            diff: message.payload.diff || '',
+            additions: message.payload.additions || 0,
+            deletions: message.payload.deletions || 0,
+            timestamp: message.payload.timestamp || Date.now(),
+            status: 'pending',
+          };
+
+          // Attach to the message that triggered this change
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id === message.id) {
+                const existingChanges = msg.pendingChanges || [];
+                // Check if this change already exists
+                const changeExists = existingChanges.some(c => c.id === pendingChange.id);
+                if (changeExists) {
+                  return {
+                    ...msg,
+                    pendingChanges: existingChanges.map(c => 
+                      c.id === pendingChange.id ? pendingChange : c
+                    ),
+                  };
+                }
+                return {
+                  ...msg,
+                  pendingChanges: [...existingChanges, pendingChange],
+                };
+              }
+              return msg;
+            })
           );
           
-          const group = createChangeGroup(
-            message.id,
-            [change],
-            `Changes from ${message.payload.changeType} operation`
-          );
-          
-          onPendingChange?.(group);
-          logger.log('Received pending change:', message.payload);
+          logger.log('Attached pending change to message:', message.id, pendingChange.path);
         }
         break;
 
@@ -265,6 +287,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         break;
 
       case 'error':
+        // Handle both 'error' and 'message' fields for compatibility
+        const errorText = message.payload.error || message.payload.message || 'Unknown error';
+        const errorCode = message.payload.code || 'UNKNOWN';
+        
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === message.id
@@ -273,7 +299,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
                   content: msg.content || 'No response received',
                   isStreaming: false,
                   hasError: true,
-                  errorMessage: message.payload.error || 'Unknown error',
+                  errorMessage: errorText,
                   retryCount: (msg.retryCount || 0),
                 }
               : msg
@@ -282,15 +308,35 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         setCurrentStreamingId(null);
         streamingContentRef.current.delete(message.id);
         onError?.({
-          message: message.payload.error || 'Unknown error',
-          type: message.payload.code?.startsWith('COPILOT_') ? 'copilot' : 'internal',
-          code: message.payload.code,
+          message: errorText,
+          type: errorCode.startsWith('COPILOT_') || errorCode === 'NO_MODEL' ? 'copilot' : 'internal',
+          code: errorCode,
           canRetry: true,
         });
         break;
 
       case 'status':
         logger.log('Status:', message.payload.message);
+        break;
+
+      case 'fileChanged':
+      case 'fileCreated':
+      case 'fileDeleted':
+        // Handle file sync events from VS Code
+        if (message.payload.path) {
+          const syncEvent: FileSyncEvent = {
+            path: message.payload.path,
+            changeType: message.type === 'fileChanged' ? 'changed' 
+              : message.type === 'fileCreated' ? 'created' 
+              : 'deleted',
+            timestamp: message.payload.timestamp || Date.now(),
+            content: message.payload.content,
+            language: message.payload.language,
+            size: message.payload.size,
+          };
+          onFileSync?.(syncEvent);
+          logger.log('File sync event:', syncEvent.changeType, syncEvent.path);
+        }
         break;
 
       case 'models':
@@ -300,26 +346,111 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         }
         break;
     }
-  }, [onError, onModelsReceived, onPendingChange]);
+  }, [onError, onModelsReceived, onFileSync]);
+
+  // Helper to update change status in messages
+  const updateChangeStatus = useCallback((changeId: string, status: 'approved' | 'rejected') => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.pendingChanges?.some(c => c.id === changeId)) {
+          return {
+            ...msg,
+            pendingChanges: msg.pendingChanges.map(c =>
+              c.id === changeId ? { ...c, status } : c
+            ),
+          };
+        }
+        return msg;
+      })
+    );
+  }, []);
 
   const approveChange = useCallback((changeId: string) => {
+    // Update local state first
+    updateChangeStatus(changeId, 'approved');
+    
+    // Send to server
     if (wsClient.isConnected()) {
       wsClient.send({
-        type: 'changeApproved',
-        changeId,
+        id: generateUUID(),
+        type: 'approveChange',
+        payload: { changeId },
       });
       logger.log('Approved change:', changeId);
     }
-  }, []);
+  }, [updateChangeStatus]);
 
   const rejectChange = useCallback((changeId: string) => {
+    // Update local state first
+    updateChangeStatus(changeId, 'rejected');
+    
+    // Send to server
     if (wsClient.isConnected()) {
       wsClient.send({
-        type: 'changeRejected',
-        changeId,
+        id: generateUUID(),
+        type: 'rejectChange',
+        payload: { changeId },
       });
       logger.log('Rejected change:', changeId);
     }
+  }, [updateChangeStatus]);
+
+  const approveAllChangesInMessage = useCallback((messageId: string) => {
+    setMessages((prev) => {
+      const message = prev.find(m => m.id === messageId);
+      if (message?.pendingChanges) {
+        message.pendingChanges.forEach(change => {
+          if (change.status === 'pending' && wsClient.isConnected()) {
+            wsClient.send({ 
+              id: generateUUID(), 
+              type: 'approveChange', 
+              payload: { changeId: change.id } 
+            });
+          }
+        });
+      }
+      return prev.map((msg) => {
+        if (msg.id === messageId && msg.pendingChanges) {
+          return {
+            ...msg,
+            pendingChanges: msg.pendingChanges.map(c =>
+              c.status === 'pending' ? { ...c, status: 'approved' as const } : c
+            ),
+          };
+        }
+        return msg;
+      });
+    });
+    logger.log('Approved all changes in message:', messageId);
+  }, []);
+
+  const rejectAllChangesInMessage = useCallback((messageId: string) => {
+    setMessages((prev) => {
+      const message = prev.find(m => m.id === messageId);
+      if (message?.pendingChanges) {
+        message.pendingChanges.forEach(change => {
+          if (change.status === 'pending' && wsClient.isConnected()) {
+            wsClient.send({ 
+              id: generateUUID(), 
+              type: 'rejectChange', 
+              payload: { changeId: change.id } 
+            });
+          }
+        });
+      }
+      return prev.map((msg) => {
+        if (msg.id === messageId && msg.pendingChanges) {
+          return {
+            ...msg,
+            pendingChanges: msg.pendingChanges.map(c =>
+              c.status === 'pending' ? { ...c, status: 'rejected' as const } : c
+            ),
+          };
+        }
+        return msg;
+      });
+    });
+    logger.log('Rejected all changes in message:', messageId);
   }, []);
 
   // Sync connection status with wsClient state on mount
@@ -343,5 +474,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     requestModels,
     approveChange,
     rejectChange,
+    approveAllChangesInMessage,
+    rejectAllChangesInMessage,
   };
 }

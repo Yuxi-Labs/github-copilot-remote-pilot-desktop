@@ -20,6 +20,10 @@ interface ChatViewProps {
   onBranch?: (messageIndex: number) => void;
   onRetry?: (messageId: string, content: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onApproveChange?: (changeId: string) => void;
+  onRejectChange?: (changeId: string) => void;
+  onApproveAllChanges?: (messageId: string) => void;
+  onRejectAllChanges?: (messageId: string) => void;
   isConnected: boolean;
   isStreaming: boolean;
   streamingStatus?: string;
@@ -56,6 +60,10 @@ export function ChatView({
   onModeChange,
   onRetry,
   onRegenerate,
+  onApproveChange,
+  onRejectChange,
+  onApproveAllChanges,
+  onRejectAllChanges,
   activeContext,
   contextFiles,
   onToggleContextFile,
@@ -126,6 +134,10 @@ export function ChatView({
         onBranch={onBranch}
         onRetry={onRetry}
         onRegenerate={onRegenerate}
+        onApproveChange={onApproveChange}
+        onRejectChange={onRejectChange}
+        onApproveAllChanges={onApproveAllChanges}
+        onRejectAllChanges={onRejectAllChanges}
       />
       
       <MessageInput

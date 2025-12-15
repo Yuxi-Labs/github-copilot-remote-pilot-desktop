@@ -7,6 +7,7 @@ import { useContextMenu, ContextMenuItem } from './ContextMenu';
 interface WorkspaceExplorerProps {
   isConnected: boolean;
   connectionUrl?: string;
+  refreshTrigger?: number;
   onFileSelect?: (path: string, content: string) => void;
   onEditFile?: (path: string, content: string, language?: string, isPreview?: boolean) => void;
   onAttachFile?: (file: { name: string; path: string; content: string }) => void;
@@ -58,6 +59,7 @@ function getFileIcon(name: string) {
 export function WorkspaceExplorer({ 
   isConnected,
   connectionUrl,
+  refreshTrigger,
   onFileSelect, 
   onEditFile,
   onAttachFile,
@@ -142,6 +144,13 @@ export function WorkspaceExplorer({
     }
   }, [isConnected, loadDirectory]);
 
+  // Refresh when trigger changes (e.g., file created/deleted)
+  useEffect(() => {
+    if (isConnected && refreshTrigger !== undefined && refreshTrigger > 0) {
+      loadDirectory();
+    }
+  }, [refreshTrigger, isConnected, loadDirectory]);
+
   const toggleDirectory = (path: string) => {
     setState(prev => {
       const newExpanded = new Set(prev.expandedDirs);
@@ -180,7 +189,7 @@ export function WorkspaceExplorer({
 
   const handleContextMenu = useCallback((e: React.MouseEvent, entry: FileEntry) => {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent bubbling to parent handlers
 
     const items: ContextMenuItem[] = [];
 
@@ -322,7 +331,7 @@ export function WorkspaceExplorer({
   }
 
   return (
-    <div className="h-full flex flex-col bg-bg-secondary">
+    <div className="h-full flex flex-col bg-bg-secondary workspace-explorer">
       {/* Header */}
       <div className="px-3 border-b border-border flex items-center" style={{ height: '32px' }}>
         <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide">

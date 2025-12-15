@@ -398,7 +398,7 @@ export function Terminal({ isOpen, onClose, onToggleMaximize, isMaximized = fals
   const activeSession = activeSessionId ? sessions.get(activeSessionId) : null;
 
   return (
-    <div className="flex flex-col border-t border-border bg-bg-primary">
+    <div className="terminal flex flex-col border-t border-border bg-bg-primary">
       {/* Header - match the shown design */}
       <div className="flex items-center justify-between bg-[#2d2d2d] h-10 select-none px-1">
         <div className="flex items-center h-full">

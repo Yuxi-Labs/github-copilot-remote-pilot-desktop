@@ -221,7 +221,7 @@ Please analyze the differences and apply the appropriate code changes.`;
   if (!isOpen) return null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="file-editor flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Editor */}
       <div className="flex-1 overflow-hidden flex">
         {/* Line numbers */}
